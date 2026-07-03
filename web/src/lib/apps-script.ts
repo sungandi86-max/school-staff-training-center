@@ -9,6 +9,7 @@ import type {
   SaveAttendanceResult,
   SaveSignatureResult,
   SchoolConfig,
+  SetupValidationResult,
   SignatureExistsResult,
   Staff,
   Training,
@@ -38,7 +39,8 @@ export type AppsScriptAction =
   | "getMyTrainingStatus"
   | "getTrainingAttendanceStatus"
   | "getFinalAttendancePreview"
-  | "generateFinalAttendanceSheet";
+  | "generateFinalAttendanceSheet"
+  | "validateSetup";
 
 export type RuntimeConfigResult =
   | {
@@ -391,6 +393,17 @@ export async function generateFinalAttendanceSheet(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "최종 서명부를 생성하지 못했습니다."
+    };
+  }
+}
+
+export async function validateSetup(config: AppConfig): Promise<{ data?: SetupValidationResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<SetupValidationResult>(config, "validateSetup");
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "설치 상태를 점검하지 못했습니다."
     };
   }
 }

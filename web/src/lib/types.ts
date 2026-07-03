@@ -199,6 +199,33 @@ export type FinalAttendanceGenerateResult = FinalAttendancePreviewResult & {
   writtenCount: number;
 };
 
+export type SetupFolderCheck = {
+  key: "signatureFolderId" | "finalRosterFolderId" | "certificateFolderId";
+  label: string;
+  configured: boolean;
+};
+
+export type SetupSheetCheck = {
+  key: string;
+  label: string;
+  name: string;
+  exists: boolean;
+};
+
+export type SetupValidationResult = {
+  ok: boolean;
+  schoolConfig: {
+    schoolName?: string;
+    centerName?: string;
+  };
+  folders: SetupFolderCheck[];
+  sheets: SetupSheetCheck[];
+  training: {
+    totalCount: number;
+    activeCount: number;
+  };
+};
+
 export type AppsScriptEnvelope<T> = {
   ok?: boolean;
   data?: T;

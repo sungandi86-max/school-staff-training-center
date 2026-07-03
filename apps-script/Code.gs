@@ -34,6 +34,7 @@ const CONFIG_KEYS = {
   MANAGER_CONTACT: "담당자 연락처",
   SIGNATURE_FOLDER_ID: "전자서명 저장 폴더 ID",
   FINAL_ROSTER_FOLDER_ID: "최종 서명부 저장 폴더 ID",
+  CERTIFICATE_FOLDER_ID: "이수증 저장 폴더 ID",
   PRIVACY_NOTICE: "개인정보 안내문"
 };
 
@@ -143,6 +144,7 @@ const ACTIONS = {
   GET_TRAINING_ATTENDANCE_STATUS: "getTrainingAttendanceStatus",
   GET_FINAL_ATTENDANCE_PREVIEW: "getFinalAttendancePreview",
   GENERATE_FINAL_ATTENDANCE_SHEET: "generateFinalAttendanceSheet",
+  VALIDATE_SETUP: "validateSetup",
   GET_ADMIN_DASHBOARD_DATA: "getAdminDashboardData"
 };
 
@@ -182,6 +184,10 @@ function doGet(e) {
 
   if (action === ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW) {
     return getFinalAttendancePreview(e.parameter);
+  }
+
+  if (action === ACTIONS.VALIDATE_SETUP) {
+    return validateSetup();
   }
 
   return jsonResponse({
@@ -232,6 +238,8 @@ function doPost(e) {
         return getFinalAttendancePreview(payload);
       case ACTIONS.GENERATE_FINAL_ATTENDANCE_SHEET:
         return generateFinalAttendanceSheet(payload);
+      case ACTIONS.VALIDATE_SETUP:
+        return validateSetup();
       case ACTIONS.GET_ADMIN_DASHBOARD_DATA:
         return getAdminDashboardData();
       default:
@@ -273,6 +281,79 @@ function getSchoolConfig() {
     managerName: config[CONFIG_KEYS.MANAGER_NAME] || "",
     managerContact: config[CONFIG_KEYS.MANAGER_CONTACT] || "",
     privacyNotice: config[CONFIG_KEYS.PRIVACY_NOTICE] || ""
+  });
+}
+
+/**
+ * Validate installation prerequisites without exposing staff data.
+ *
+ * Input: none
+ * Output: folder config status, required sheet status, and active training count.
+ */
+function validateSetup() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const config = getConfigMap_();
+  const requiredSheets = [
+    { key: "schoolConfig", label: "학교설정", name: SHEET_NAMES.CONFIG },
+    { key: "trainings", label: "교육목록", name: SHEET_NAMES.TRAININGS },
+    { key: "staff", label: "교직원명단", name: SHEET_NAMES.STAFF },
+    { key: "targets", label: "교육대상", name: SHEET_NAMES.TARGETS },
+    { key: "attendance", label: "QR출석기록", name: SHEET_NAMES.ATTENDANCE },
+    { key: "signatures", label: "전자서명기록", name: SHEET_NAMES.SIGNATURES },
+    { key: "finalRoster", label: "최종서명부", name: SHEET_NAMES.FINAL_ROSTER }
+  ];
+  const sheets = requiredSheets.map(function (sheet) {
+    return {
+      key: sheet.key,
+      label: sheet.label,
+      name: sheet.name,
+      exists: Boolean(spreadsheet.getSheetByName(sheet.name))
+    };
+  });
+  const folders = [
+    {
+      key: "signatureFolderId",
+      label: "전자서명 저장 폴더",
+      value: getConfigValue_(config, ["signatureFolderId", CONFIG_KEYS.SIGNATURE_FOLDER_ID, "전자서명저장폴더ID"])
+    },
+    {
+      key: "finalRosterFolderId",
+      label: "최종 서명부 저장 폴더",
+      value: getConfigValue_(config, ["finalRosterFolderId", CONFIG_KEYS.FINAL_ROSTER_FOLDER_ID, "최종서명부저장폴더ID"])
+    },
+    {
+      key: "certificateFolderId",
+      label: "이수증 저장 폴더",
+      value: getConfigValue_(config, ["certificateFolderId", CONFIG_KEYS.CERTIFICATE_FOLDER_ID, "이수증저장폴더ID"])
+    }
+  ].map(function (folder) {
+    return {
+      key: folder.key,
+      label: folder.label,
+      configured: Boolean(String(folder.value || "").trim())
+    };
+  });
+  const trainings = sheets.some(function (sheet) {
+    return sheet.name === SHEET_NAMES.TRAININGS && sheet.exists;
+  }) ? readRows(SHEET_NAMES.TRAININGS) : [];
+  const activeTrainingCount = trainings.filter(function (row) {
+    return isActiveTrainingStatus(row[TRAINING_COLUMNS.ACTIVE_STATUS]);
+  }).length;
+
+  return jsonResponse({
+    schoolConfig: {
+      schoolName: config[CONFIG_KEYS.SCHOOL_NAME] || "",
+      centerName: config[CONFIG_KEYS.CENTER_NAME] || "학교 교직원 교육센터"
+    },
+    folders: folders,
+    sheets: sheets,
+    training: {
+      totalCount: trainings.length,
+      activeCount: activeTrainingCount
+    },
+    ok: folders.every(function (folder) { return folder.configured; }) &&
+      sheets.every(function (sheet) { return sheet.exists; }) &&
+      activeTrainingCount > 0
   });
 }
 
@@ -1424,6 +1505,17 @@ function getConfigMap_() {
   });
 
   return config;
+}
+
+function getConfigValue_(config, keys) {
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (config[key]) {
+      return config[key];
+    }
+  }
+
+  return "";
 }
 
 function getSignatureFolderId_() {

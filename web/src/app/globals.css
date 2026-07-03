@@ -626,6 +626,155 @@ p {
   min-width: 720px;
 }
 
+.setup-progress {
+  display: grid;
+  gap: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 24px;
+  background: #ffffff;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.setup-progress-bar {
+  height: 9px;
+  overflow: hidden;
+  border-radius: var(--radius-button);
+  background: #eef2ff;
+}
+
+.setup-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), #22c55e);
+  transition: width 180ms ease;
+}
+
+.setup-steps {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.setup-steps::-webkit-scrollbar {
+  display: none;
+}
+
+.setup-step {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: var(--radius-button);
+  background: #ffffff;
+  padding: 0 12px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.setup-step span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #eef2ff;
+  color: var(--primary);
+  font-size: 12px;
+}
+
+.setup-step.active {
+  border-color: rgba(79, 70, 229, 0.35);
+  background: #f4f5ff;
+  color: var(--navy);
+}
+
+.setup-check-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.setup-status-card {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.setup-status-card strong {
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.setup-status-card p {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.setup-status-card.success {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: #ecfdf5;
+}
+
+.setup-status-card.warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: #fffbeb;
+}
+
+.setup-status-card.error {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: #fef2f2;
+}
+
+.setup-state {
+  width: fit-content;
+  border-radius: var(--radius-button);
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.setup-idle {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.setup-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.setup-warning {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.setup-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.setup-config-preview {
+  overflow-x: auto;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  background: #0f172a;
+  padding: 16px;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .admin-attendance-cards {
   display: grid;
   gap: 14px;
@@ -1067,6 +1216,10 @@ p {
 
   .status-summary-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .setup-check-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .status-card-head {

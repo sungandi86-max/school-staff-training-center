@@ -3,6 +3,8 @@ import type {
   AdminAttendanceStatusResult,
   AdminStaff,
   AppsScriptEnvelope,
+  CertificateRequiredTrainingsResult,
+  CertificateSubmissionResult,
   DuplicateAttendanceResult,
   FinalAttendanceGenerateResult,
   FinalAttendancePreviewResult,
@@ -46,6 +48,8 @@ export type AppsScriptAction =
   | "saveSignature"
   | "getMyTrainingStatus"
   | "getMyTrainingStatusByNameDept"
+  | "getCertificateRequiredTrainings"
+  | "saveCertificateSubmission"
   | "getTrainingAttendanceStatus"
   | "getFinalAttendancePreview"
   | "generateFinalAttendanceSheet"
@@ -454,6 +458,49 @@ export async function getMyTrainingStatusByNameDept(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "내 이수현황을 불러오지 못했습니다."
+    };
+  }
+}
+
+export async function getCertificateRequiredTrainings(
+  config: AppConfig,
+  name: string,
+  department: string
+): Promise<{ data?: CertificateRequiredTrainingsResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<CertificateRequiredTrainingsResult>(config, "getCertificateRequiredTrainings", {
+      name,
+      department
+    });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "이수증 제출 대상 교육을 불러오지 못했습니다."
+    };
+  }
+}
+
+export type CertificateSubmissionPayload = {
+  trainingId: string;
+  staffId: string;
+  completedDate: string;
+  issuer: string;
+  certificateNumber: string;
+  fileName: string;
+  fileMimeType: string;
+  fileBase64: string;
+};
+
+export async function saveCertificateSubmission(
+  config: AppConfig,
+  payload: CertificateSubmissionPayload
+): Promise<{ data?: CertificateSubmissionResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<CertificateSubmissionResult>(config, "saveCertificateSubmission", payload);
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "이수증을 제출하지 못했습니다."
     };
   }
 }

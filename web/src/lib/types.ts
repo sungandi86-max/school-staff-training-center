@@ -162,6 +162,43 @@ export type MyTrainingStatusResult = {
   items: MyTrainingStatusItem[];
 };
 
+export type CertificateRequiredTraining = {
+  trainingId: string;
+  title: string;
+  date: string;
+  time?: string;
+  place?: string;
+  department: string;
+  certificateRequired: boolean;
+  certificateSubmitted: boolean;
+  submittedAt?: string;
+  status: "미제출" | "승인대기" | "제출완료" | "승인" | "반려" | string;
+  fileUrl?: string;
+};
+
+export type CertificateRequiredTrainingsResult = {
+  staff: Staff;
+  items: CertificateRequiredTraining[];
+  summary: {
+    total: number;
+    submitted: number;
+    missing: number;
+  };
+};
+
+export type CertificateSubmissionResult = {
+  submissionId: string;
+  trainingId: string;
+  trainingTitle: string;
+  staffId: string;
+  staffName: string;
+  department: string;
+  submittedAt: string;
+  fileUrl?: string;
+  fileId?: string;
+  status: "승인대기" | string;
+};
+
 export type AdminAttendanceStatusGroup = "completed" | "signature" | "absent";
 
 export type AdminAttendanceStatusItem = {

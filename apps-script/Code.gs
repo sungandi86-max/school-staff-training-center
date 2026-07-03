@@ -107,13 +107,19 @@ const SIGNATURE_COLUMNS = {
 const CERTIFICATE_COLUMNS = {
   CERTIFICATE_ID: "제출ID",
   TRAINING_ID: "교육ID",
+  TRAINING_TITLE: "교육명",
   STAFF_ID: "교직원ID",
   STAFF_NAME: "성명",
+  DEPARTMENT: "부서",
   SUBMITTED_AT: "제출일시",
-  FILE_URL: "이수증파일URL",
+  COMPLETED_DATE: "이수일자",
+  ISSUER: "이수기관",
+  CERTIFICATE_NUMBER: "이수증번호",
+  FILE_URL: "파일URL",
   FILE_ID: "이수증파일ID",
   SUBMIT_STATUS: "제출상태",
   APPROVAL_STATUS: "승인상태",
+  REVIEWER: "확인자",
   NOTE: "비고"
 };
 
@@ -150,6 +156,8 @@ const ACTIONS = {
   CHECK_SIGNATURE_EXISTS: "checkSignatureExists",
   GET_MY_TRAINING_STATUS: "getMyTrainingStatus",
   GET_MY_TRAINING_STATUS_BY_NAME_DEPT: "getMyTrainingStatusByNameDept",
+  GET_CERTIFICATE_REQUIRED_TRAININGS: "getCertificateRequiredTrainings",
+  SAVE_CERTIFICATE_SUBMISSION: "saveCertificateSubmission",
   GET_TRAINING_ATTENDANCE_STATUS: "getTrainingAttendanceStatus",
   GET_FINAL_ATTENDANCE_PREVIEW: "getFinalAttendancePreview",
   GENERATE_FINAL_ATTENDANCE_SHEET: "generateFinalAttendanceSheet",
@@ -254,6 +262,10 @@ function doPost(e) {
         return getMyTrainingStatus(payload);
       case ACTIONS.GET_MY_TRAINING_STATUS_BY_NAME_DEPT:
         return getMyTrainingStatusByNameDept(payload);
+      case ACTIONS.GET_CERTIFICATE_REQUIRED_TRAININGS:
+        return getCertificateRequiredTrainings(payload);
+      case ACTIONS.SAVE_CERTIFICATE_SUBMISSION:
+        return saveCertificateSubmission(payload);
       case ACTIONS.GET_TRAINING_ATTENDANCE_STATUS:
         return getTrainingAttendanceStatus(payload);
       case ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW:
@@ -1144,6 +1156,205 @@ function buildMyTrainingStatusResponse_(staff) {
 }
 
 /**
+ * Read certificate-required target trainings for one staff member by name and optional department.
+ *
+ * Input: { name: string, department?: string }
+ * Output: staff info and certificate-required training items only.
+ */
+function getCertificateRequiredTrainings(payload) {
+  const staffLookup = findActiveStaffByNameDept_(payload && payload.name, payload && payload.department);
+
+  if (!staffLookup.ok) {
+    return staffLookup.response;
+  }
+
+  const staff = staffLookup.staff;
+  const staffId = String(staff[STAFF_COLUMNS.STAFF_ID] || "").trim();
+  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
+    return String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
+      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
+  });
+  const trainings = readRows(SHEET_NAMES.TRAININGS);
+  const certificates = readRowsOptional_(SHEET_NAMES.CERTIFICATES);
+
+  const items = targets.map(function (target) {
+    const trainingId = target[TARGET_COLUMNS.TRAINING_ID] || "";
+    const training = findInRows_(trainings, TRAINING_COLUMNS.TRAINING_ID, trainingId);
+
+    if (!training) {
+      return null;
+    }
+
+    const normalizedTraining = normalizeTrainingRow_(training);
+
+    if (!normalizedTraining.certificateRequired) {
+      return null;
+    }
+
+    const certificate = findCertificate_(certificates, trainingId, staffId);
+    const submittedAt = certificate ? serializeDateTime_(certificate[CERTIFICATE_COLUMNS.SUBMITTED_AT] || certificate["제출일시"] || certificate["제출일"]) : "";
+    const status = certificate ?
+      String(certificate[CERTIFICATE_COLUMNS.APPROVAL_STATUS] || certificate[CERTIFICATE_COLUMNS.SUBMIT_STATUS] || certificate["상태"] || "승인대기").trim() :
+      "미제출";
+
+    return {
+      trainingId: normalizedTraining.trainingId,
+      title: normalizedTraining.title,
+      date: normalizedTraining.date,
+      time: normalizedTraining.time,
+      place: normalizedTraining.place,
+      department: normalizedTraining.department,
+      certificateRequired: true,
+      certificateSubmitted: Boolean(certificate),
+      submittedAt: submittedAt,
+      status: status,
+      fileUrl: certificate ? String(certificate[CERTIFICATE_COLUMNS.FILE_URL] || certificate["파일URL"] || certificate["이수증파일URL"] || "").trim() : ""
+    };
+  }).filter(Boolean).sort(function (a, b) {
+    if (a.certificateSubmitted !== b.certificateSubmitted) {
+      return a.certificateSubmitted ? 1 : -1;
+    }
+
+    return String(a.date || "").localeCompare(String(b.date || ""));
+  });
+
+  return jsonResponse({
+    staff: normalizeStaffRow_(staff),
+    items: items,
+    summary: {
+      total: items.length,
+      submitted: items.filter(function (item) {
+        return item.certificateSubmitted;
+      }).length,
+      missing: items.filter(function (item) {
+        return !item.certificateSubmitted;
+      }).length
+    }
+  });
+}
+
+/**
+ * Save certificate file to Google Drive and metadata to 06_이수증제출.
+ *
+ * Input: { trainingId, staffId, completedDate, issuer, certificateNumber, fileName, fileMimeType, fileBase64 }
+ * Output: saved certificate submission metadata.
+ */
+function saveCertificateSubmission(payload) {
+  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
+  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
+  const completedDate = payload && payload.completedDate ? String(payload.completedDate).trim() : "";
+  const issuer = payload && payload.issuer ? String(payload.issuer).trim() : "";
+  const certificateNumber = payload && payload.certificateNumber ? String(payload.certificateNumber).trim() : "";
+  const fileName = payload && payload.fileName ? String(payload.fileName).trim() : "";
+  const fileMimeType = payload && payload.fileMimeType ? String(payload.fileMimeType).trim() : "";
+  const fileBase64 = payload && payload.fileBase64 ? String(payload.fileBase64) : "";
+
+  if (!trainingId || !staffId) {
+    return errorResponse("교육과 교직원 정보가 필요합니다.", "MISSING_CERTIFICATE_KEYS");
+  }
+
+  if (!completedDate || !issuer) {
+    return errorResponse("이수일자와 이수기관을 입력해 주세요.", "MISSING_CERTIFICATE_FIELDS");
+  }
+
+  if (!fileName || !fileMimeType || !fileBase64) {
+    return errorResponse("이수증 파일을 선택해 주세요.", "MISSING_CERTIFICATE_FILE");
+  }
+
+  const normalizedMimeType = normalizeCertificateMimeType_(fileName, fileMimeType);
+
+  if (["application/pdf", "image/jpeg", "image/png"].indexOf(normalizedMimeType) === -1) {
+    return errorResponse("PDF, JPG, PNG 파일만 제출할 수 있습니다.", "UNSUPPORTED_CERTIFICATE_FILE");
+  }
+
+  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
+  if (!training) {
+    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  }
+
+  const normalizedTraining = normalizeTrainingRow_(training);
+  if (!normalizedTraining.certificateRequired) {
+    return errorResponse("이수증 제출 대상 교육이 아닙니다.", "CERTIFICATE_NOT_REQUIRED");
+  }
+
+  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
+  if (!staff || !isActiveStaff(staff)) {
+    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  }
+
+  const target = readRows(SHEET_NAMES.TARGETS).find(function (row) {
+    return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
+      String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
+      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
+  });
+
+  if (!target) {
+    return errorResponse("해당 교육 대상자가 아닙니다.", "NOT_TRAINING_TARGET");
+  }
+
+  const folderId = getCertificateFolderId_();
+  if (!folderId) {
+    return errorResponse("이수증 저장 폴더가 설정되지 않았습니다. 관리자에게 문의해 주세요.", "CERTIFICATE_FOLDER_NOT_CONFIGURED");
+  }
+
+  const normalizedStaff = normalizeStaffRow_(staff);
+  const submittedAt = new Date();
+  const submissionId = createId_("CERT");
+  const safeFileName = submissionId + "_" + fileName.replace(/[\\/:*?"<>|]/g, "_");
+  const blob = certificateFileBlob_(fileBase64, normalizedMimeType, safeFileName);
+  const folder = DriveApp.getFolderById(folderId);
+  const file = folder.createFile(blob);
+  const fileUrl = file.getUrl();
+  const fileId = file.getId();
+
+  appendRow(SHEET_NAMES.CERTIFICATES, {
+    [CERTIFICATE_COLUMNS.CERTIFICATE_ID]: submissionId,
+    [CERTIFICATE_COLUMNS.TRAINING_ID]: trainingId,
+    [CERTIFICATE_COLUMNS.TRAINING_TITLE]: normalizedTraining.title,
+    [CERTIFICATE_COLUMNS.STAFF_ID]: staffId,
+    [CERTIFICATE_COLUMNS.STAFF_NAME]: normalizedStaff.name,
+    [CERTIFICATE_COLUMNS.DEPARTMENT]: normalizedStaff.department,
+    [CERTIFICATE_COLUMNS.SUBMITTED_AT]: submittedAt,
+    [CERTIFICATE_COLUMNS.COMPLETED_DATE]: completedDate,
+    [CERTIFICATE_COLUMNS.ISSUER]: issuer,
+    [CERTIFICATE_COLUMNS.CERTIFICATE_NUMBER]: certificateNumber,
+    [CERTIFICATE_COLUMNS.FILE_URL]: fileUrl,
+    [CERTIFICATE_COLUMNS.FILE_ID]: fileId,
+    [CERTIFICATE_COLUMNS.SUBMIT_STATUS]: "승인대기",
+    [CERTIFICATE_COLUMNS.APPROVAL_STATUS]: "승인대기",
+    [CERTIFICATE_COLUMNS.REVIEWER]: "",
+    [CERTIFICATE_COLUMNS.NOTE]: "",
+    "제출ID": submissionId,
+    "교육ID": trainingId,
+    "교육명": normalizedTraining.title,
+    "교직원ID": staffId,
+    "성명": normalizedStaff.name,
+    "부서": normalizedStaff.department,
+    "제출일시": submittedAt,
+    "이수일자": completedDate,
+    "이수기관": issuer,
+    "이수증번호": certificateNumber,
+    "파일URL": fileUrl,
+    "상태": "승인대기",
+    "확인자": "",
+    "비고": ""
+  });
+
+  return jsonResponse({
+    submissionId: submissionId,
+    trainingId: trainingId,
+    trainingTitle: normalizedTraining.title,
+    staffId: staffId,
+    staffName: normalizedStaff.name,
+    department: normalizedStaff.department,
+    submittedAt: serializeDateTime_(submittedAt),
+    fileUrl: fileUrl,
+    fileId: fileId,
+    status: "승인대기"
+  });
+}
+
+/**
  * Read target attendance/signature status for one training.
  *
  * Input: { trainingId: string }
@@ -1855,6 +2066,52 @@ function readRowsOptional_(sheetName) {
   }
 }
 
+function findActiveStaffByNameDept_(nameValue, departmentValue) {
+  const name = nameValue ? String(nameValue).trim() : "";
+  const department = departmentValue ? String(departmentValue).trim() : "";
+
+  if (!name) {
+    return {
+      ok: false,
+      response: errorResponse("성명을 입력해 주세요.", "MISSING_STAFF_NAME")
+    };
+  }
+
+  const matchesByName = readRows(SHEET_NAMES.STAFF).filter(function (row) {
+    return isActiveStaff(row) && String(row[STAFF_COLUMNS.NAME] || "").trim() === name;
+  });
+
+  if (!matchesByName.length) {
+    return {
+      ok: false,
+      response: errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND")
+    };
+  }
+
+  const matches = department ? matchesByName.filter(function (row) {
+    return String(row[STAFF_COLUMNS.DEPARTMENT] || "").trim() === department;
+  }) : matchesByName;
+
+  if (!matches.length) {
+    return {
+      ok: false,
+      response: errorResponse("성명과 소속부서를 확인해 주세요.", "STAFF_NOT_FOUND")
+    };
+  }
+
+  if (matches.length > 1) {
+    return {
+      ok: false,
+      response: errorResponse("동명이인이 있습니다. 소속부서를 입력해 주세요.", "DUPLICATE_STAFF_NAME")
+    };
+  }
+
+  return {
+    ok: true,
+    staff: matches[0]
+  };
+}
+
 function getConfigMap_() {
   const rows = readRows(SHEET_NAMES.CONFIG);
   const config = {};
@@ -1892,11 +2149,54 @@ function getSignatureFolderId_() {
   ).trim();
 }
 
+function getCertificateFolderId_() {
+  const config = getConfigMap_();
+  return String(
+    config.certificateFolderId ||
+      config["certificateFolderId"] ||
+      config[CONFIG_KEYS.CERTIFICATE_FOLDER_ID] ||
+      config["이수증저장폴더ID"] ||
+      config["이수증 저장 폴더 ID"] ||
+      ""
+  ).trim();
+}
+
 function signatureImageBlob_(signatureImageBase64, filename) {
   const normalized = String(signatureImageBase64 || "").trim();
   const base64 = normalized.indexOf(",") !== -1 ? normalized.split(",").pop() : normalized;
   const bytes = Utilities.base64Decode(base64);
   return Utilities.newBlob(bytes, "image/png", filename);
+}
+
+function certificateFileBlob_(fileBase64, mimeType, filename) {
+  const normalized = String(fileBase64 || "").trim();
+  const base64 = normalized.indexOf(",") !== -1 ? normalized.split(",").pop() : normalized;
+  const bytes = Utilities.base64Decode(base64);
+  return Utilities.newBlob(bytes, mimeType, filename);
+}
+
+function normalizeCertificateMimeType_(fileName, mimeType) {
+  const normalizedMimeType = String(mimeType || "").trim();
+
+  if (normalizedMimeType) {
+    return normalizedMimeType;
+  }
+
+  const extension = String(fileName || "").split(".").pop().toLowerCase();
+
+  if (extension === "pdf") {
+    return "application/pdf";
+  }
+
+  if (extension === "jpg" || extension === "jpeg") {
+    return "image/jpeg";
+  }
+
+  if (extension === "png") {
+    return "image/png";
+  }
+
+  return "";
 }
 
 function serializeDate_(value) {

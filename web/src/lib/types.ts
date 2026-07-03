@@ -40,6 +40,37 @@ export type Training = {
   activeStatus: string;
 };
 
+export type Staff = {
+  staffId: string;
+  name: string;
+  department: string;
+  position?: string;
+};
+
+export type TrainingTargetResult = {
+  isTarget: boolean;
+  signatureExcluded?: boolean;
+  required?: boolean;
+};
+
+export type DuplicateAttendanceResult = {
+  duplicate: boolean;
+  attendanceId?: string;
+  attendedAt?: string;
+  processStatus?: string;
+};
+
+export type SaveAttendanceResult = {
+  attendanceId: string;
+  trainingId: string;
+  trainingTitle?: string;
+  attendedAt: string;
+  duplicate: boolean;
+  processStatus: string;
+  signatureRequired?: boolean;
+  status: "saved" | "already";
+};
+
 export type AppsScriptEnvelope<T> = {
   ok?: boolean;
   data?: T;

@@ -74,14 +74,15 @@ const TARGET_COLUMNS = {
 const ATTENDANCE_COLUMNS = {
   ATTENDANCE_ID: "출석ID",
   TRAINING_ID: "교육ID",
+  TRAINING_TITLE: "교육명",
   STAFF_ID: "교직원ID",
   STAFF_NAME: "성명",
   DEPARTMENT: "부서",
   ATTENDED_AT: "출석일시",
   METHOD: "출석방법",
-  SIGNATURE_REQUIRED: "전자서명필요여부",
-  SIGNATURE_SAVED: "전자서명저장여부",
-  SIGNATURE_ID: "서명ID",
+  DUPLICATE: "중복여부",
+  PROCESS_STATUS: "처리상태",
+  RECORDER: "기록자",
   NOTE: "비고"
 };
 
@@ -99,8 +100,10 @@ const SIGNATURE_COLUMNS = {
 const ACTIONS = {
   GET_SCHOOL_CONFIG: "getSchoolConfig",
   GET_TRAINING_LIST: "getTrainingList",
+  GET_TRAINING_DETAIL: "getTrainingDetail",
   VERIFY_STAFF: "verifyStaff",
   CHECK_TRAINING_TARGET: "checkTrainingTarget",
+  CHECK_DUPLICATE_ATTENDANCE: "checkDuplicateAttendance",
   SAVE_QR_ATTENDANCE: "saveQrAttendance",
   SAVE_SIGNATURE: "saveSignature",
   GET_MY_TRAINING_STATUS: "getMyTrainingStatus",
@@ -124,6 +127,10 @@ function doGet(e) {
 
   if (action === ACTIONS.GET_TRAINING_LIST) {
     return getTrainingList(e.parameter);
+  }
+
+  if (action === ACTIONS.GET_TRAINING_DETAIL) {
+    return getTrainingDetail(e.parameter);
   }
 
   return jsonResponse({
@@ -150,10 +157,14 @@ function doPost(e) {
         return getSchoolConfig();
       case ACTIONS.GET_TRAINING_LIST:
         return getTrainingList(payload);
+      case ACTIONS.GET_TRAINING_DETAIL:
+        return getTrainingDetail(payload);
       case ACTIONS.VERIFY_STAFF:
         return verifyStaff(payload);
       case ACTIONS.CHECK_TRAINING_TARGET:
         return checkTrainingTarget(payload);
+      case ACTIONS.CHECK_DUPLICATE_ATTENDANCE:
+        return checkDuplicateAttendance(payload);
       case ACTIONS.SAVE_QR_ATTENDANCE:
         return saveQrAttendance(payload);
       case ACTIONS.SAVE_SIGNATURE:
@@ -221,27 +232,32 @@ function getTrainingList(payload) {
       return includeInactive || isActiveTrainingStatus(row[TRAINING_COLUMNS.ACTIVE_STATUS]);
     })
     .map(function (row) {
-      const place = row[TRAINING_COLUMNS.LOCATION] || "";
-      const status = String(row[TRAINING_COLUMNS.ACTIVE_STATUS] || "").trim();
-
-      return {
-        trainingId: row[TRAINING_COLUMNS.TRAINING_ID] || "",
-        title: row[TRAINING_COLUMNS.TITLE] || "",
-        date: serializeDate_(row[TRAINING_COLUMNS.DATE]),
-        time: serializeTime_(row[TRAINING_COLUMNS.TIME]),
-        place: place,
-        location: place,
-        department: row[TRAINING_COLUMNS.DEPARTMENT] || "",
-        category: row[TRAINING_COLUMNS.CATEGORY] || "",
-        qrEnabled: isTruthy(row[TRAINING_COLUMNS.QR_ENABLED]),
-        signatureRequired: isTruthy(row[TRAINING_COLUMNS.SIGNATURE_REQUIRED]),
-        certificateRequired: isTruthy(row[TRAINING_COLUMNS.CERTIFICATE_REQUIRED]),
-        status: status,
-        activeStatus: status
-      };
+      return normalizeTrainingRow_(row);
     });
 
   return jsonResponse(trainings);
+}
+
+/**
+ * Read one training from 01_교육목록.
+ *
+ * Input: { trainingId: string }
+ * Output: normalized training object.
+ */
+function getTrainingDetail(payload) {
+  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
+
+  if (!trainingId) {
+    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  }
+
+  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
+
+  if (!training) {
+    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  }
+
+  return jsonResponse(normalizeTrainingRow_(training));
 }
 
 /**
@@ -317,6 +333,39 @@ function checkTrainingTarget(payload) {
 }
 
 /**
+ * Check duplicate QR attendance from 04_QR출석기록.
+ *
+ * Input: { trainingId: string, staffId: string }
+ * Output: { duplicate, attendanceId, attendedAt, processStatus }
+ */
+function checkDuplicateAttendance(payload) {
+  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
+  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
+
+  if (!trainingId || !staffId) {
+    return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_DUPLICATE_KEYS");
+  }
+
+  const existing = findAttendance_(trainingId, staffId);
+
+  if (!existing) {
+    return jsonResponse({
+      duplicate: false,
+      attendanceId: "",
+      attendedAt: "",
+      processStatus: ""
+    });
+  }
+
+  return jsonResponse({
+    duplicate: true,
+    attendanceId: existing[ATTENDANCE_COLUMNS.ATTENDANCE_ID] || "",
+    attendedAt: serializeDateTime_(existing[ATTENDANCE_COLUMNS.ATTENDED_AT]),
+    processStatus: existing[ATTENDANCE_COLUMNS.PROCESS_STATUS] || "완료"
+  });
+}
+
+/**
  * Save QR attendance to 04_QR출석기록.
  *
  * Input: { trainingId: string, staffId: string, method?: string }
@@ -331,51 +380,66 @@ function saveQrAttendance(payload) {
     return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_ATTENDANCE_KEYS");
   }
 
+  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
+  if (!training) {
+    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  }
+
+  const normalizedTraining = normalizeTrainingRow_(training);
+  if (!isActiveTrainingStatus(normalizedTraining.status)) {
+    return errorResponse("활성 교육만 QR 출석할 수 있습니다.", "INACTIVE_TRAINING");
+  }
+
+  if (!normalizedTraining.qrEnabled) {
+    return errorResponse("QR 출석을 사용하지 않는 교육입니다.", "QR_DISABLED");
+  }
+
   const targetResult = extractJsonData(checkTrainingTarget({ trainingId: trainingId, staffId: staffId }));
   if (!targetResult.isTarget) {
     return errorResponse("교육 대상자가 아닙니다.", "NOT_TRAINING_TARGET");
   }
 
-  const existing = readRows(SHEET_NAMES.ATTENDANCE).find(function (row) {
-    return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-      String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-  });
+  const existing = findAttendance_(trainingId, staffId);
 
   if (existing) {
     return jsonResponse({
       attendanceId: existing[ATTENDANCE_COLUMNS.ATTENDANCE_ID] || "",
       trainingId: trainingId,
-      attendedAt: existing[ATTENDANCE_COLUMNS.ATTENDED_AT] || "",
+      attendedAt: serializeDateTime_(existing[ATTENDANCE_COLUMNS.ATTENDED_AT]),
+      duplicate: true,
+      processStatus: existing[ATTENDANCE_COLUMNS.PROCESS_STATUS] || "중복",
       status: "already"
     });
   }
 
   const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
   const attendanceId = createId_("ATT");
   const attendedAt = new Date();
-  const signatureRequired = training ? isTruthy(training[TRAINING_COLUMNS.SIGNATURE_REQUIRED]) && !targetResult.signatureExcluded : false;
+  const signatureRequired = normalizedTraining.signatureRequired && !targetResult.signatureExcluded;
 
   appendRow(SHEET_NAMES.ATTENDANCE, {
     [ATTENDANCE_COLUMNS.ATTENDANCE_ID]: attendanceId,
     [ATTENDANCE_COLUMNS.TRAINING_ID]: trainingId,
+    [ATTENDANCE_COLUMNS.TRAINING_TITLE]: normalizedTraining.title,
     [ATTENDANCE_COLUMNS.STAFF_ID]: staffId,
     [ATTENDANCE_COLUMNS.STAFF_NAME]: staff ? staff[STAFF_COLUMNS.NAME] : "",
     [ATTENDANCE_COLUMNS.DEPARTMENT]: staff ? staff[STAFF_COLUMNS.DEPARTMENT] : "",
     [ATTENDANCE_COLUMNS.ATTENDED_AT]: attendedAt,
     [ATTENDANCE_COLUMNS.METHOD]: payload && payload.method ? payload.method : "QR",
-    [ATTENDANCE_COLUMNS.SIGNATURE_REQUIRED]: signatureRequired,
-    [ATTENDANCE_COLUMNS.SIGNATURE_SAVED]: false,
-    [ATTENDANCE_COLUMNS.SIGNATURE_ID]: "",
-    [ATTENDANCE_COLUMNS.NOTE]: "TODO: signature linkage pending"
+    [ATTENDANCE_COLUMNS.DUPLICATE]: "N",
+    [ATTENDANCE_COLUMNS.PROCESS_STATUS]: "완료",
+    [ATTENDANCE_COLUMNS.RECORDER]: "GitHub Pages",
+    [ATTENDANCE_COLUMNS.NOTE]: signatureRequired ? "전자서명은 다음 단계에서 연결됩니다." : ""
   });
 
   return jsonResponse({
     attendanceId: attendanceId,
     trainingId: trainingId,
-    attendedAt: attendedAt,
+    trainingTitle: normalizedTraining.title,
+    attendedAt: serializeDateTime_(attendedAt),
+    duplicate: false,
+    processStatus: "완료",
     signatureRequired: signatureRequired,
-    signatureSaved: false,
     status: "saved"
   });
 }
@@ -581,12 +645,14 @@ function readRows(sheetName) {
  */
 function appendRow(sheetName, row) {
   const sheet = getSheetByName(sheetName);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const values = headers.map(function (header) {
+  const sheetValues = sheet.getDataRange().getValues();
+  const headerRowIndex = findHeaderRowIndex_(sheetValues, getRequiredHeadersForSheet_(sheetName));
+  const headers = sheetValues[headerRowIndex] || sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const rowValues = headers.map(function (header) {
     return row[String(header)] !== undefined ? row[String(header)] : "";
   });
 
-  sheet.appendRow(values);
+  sheet.appendRow(rowValues);
   return sheet.getLastRow();
 }
 
@@ -631,6 +697,30 @@ function getRequiredHeadersForSheet_(sheetName) {
     ];
   }
 
+  if (sheetName === SHEET_NAMES.STAFF) {
+    return [
+      STAFF_COLUMNS.STAFF_ID,
+      STAFF_COLUMNS.NAME,
+      STAFF_COLUMNS.AUTH_CODE
+    ];
+  }
+
+  if (sheetName === SHEET_NAMES.TARGETS) {
+    return [
+      TARGET_COLUMNS.TRAINING_ID,
+      TARGET_COLUMNS.STAFF_ID,
+      TARGET_COLUMNS.IS_TARGET
+    ];
+  }
+
+  if (sheetName === SHEET_NAMES.ATTENDANCE) {
+    return [
+      ATTENDANCE_COLUMNS.ATTENDANCE_ID,
+      ATTENDANCE_COLUMNS.TRAINING_ID,
+      ATTENDANCE_COLUMNS.STAFF_ID
+    ];
+  }
+
   return [];
 }
 
@@ -670,6 +760,34 @@ function isActiveTrainingStatus(value) {
   return String(value || "").trim() === "활성";
 }
 
+function normalizeTrainingRow_(row) {
+  const place = row[TRAINING_COLUMNS.LOCATION] || "";
+  const status = String(row[TRAINING_COLUMNS.ACTIVE_STATUS] || "").trim();
+
+  return {
+    trainingId: row[TRAINING_COLUMNS.TRAINING_ID] || "",
+    title: row[TRAINING_COLUMNS.TITLE] || "",
+    date: serializeDate_(row[TRAINING_COLUMNS.DATE]),
+    time: serializeTime_(row[TRAINING_COLUMNS.TIME]),
+    place: place,
+    location: place,
+    department: row[TRAINING_COLUMNS.DEPARTMENT] || "",
+    category: row[TRAINING_COLUMNS.CATEGORY] || "",
+    qrEnabled: isTruthy(row[TRAINING_COLUMNS.QR_ENABLED]),
+    signatureRequired: isTruthy(row[TRAINING_COLUMNS.SIGNATURE_REQUIRED]),
+    certificateRequired: isTruthy(row[TRAINING_COLUMNS.CERTIFICATE_REQUIRED]),
+    status: status,
+    activeStatus: status
+  };
+}
+
+function findAttendance_(trainingId, staffId) {
+  return readRows(SHEET_NAMES.ATTENDANCE).find(function (row) {
+    return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
+      String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === String(staffId || "").trim();
+  }) || null;
+}
+
 function serializeDate_(value) {
   if (!value) {
     return "";
@@ -689,6 +807,18 @@ function serializeTime_(value) {
 
   if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
     return Utilities.formatDate(value, Session.getScriptTimeZone(), "HH:mm");
+  }
+
+  return String(value).trim();
+}
+
+function serializeDateTime_(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
   }
 
   return String(value).trim();

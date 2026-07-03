@@ -1,4 +1,13 @@
-import type { AppConfig, AppsScriptEnvelope, SchoolConfig, Training } from "@/lib/types";
+import type {
+  AppConfig,
+  AppsScriptEnvelope,
+  DuplicateAttendanceResult,
+  SaveAttendanceResult,
+  SchoolConfig,
+  Staff,
+  Training,
+  TrainingTargetResult
+} from "@/lib/types";
 
 export const DEFAULT_CONFIG: SchoolConfig = {
   schoolName: "학교명 미설정",
@@ -9,7 +18,14 @@ export const DEFAULT_CONFIG: SchoolConfig = {
   privacyNotice: "전자서명과 출석 기록은 연수 증빙용으로 학교 Google Sheet와 Google Drive에 저장됩니다."
 };
 
-export type AppsScriptAction = "getSchoolConfig" | "getTrainingList";
+export type AppsScriptAction =
+  | "getSchoolConfig"
+  | "getTrainingList"
+  | "getTrainingDetail"
+  | "verifyStaff"
+  | "checkTrainingTarget"
+  | "checkDuplicateAttendance"
+  | "saveQrAttendance";
 
 export type RuntimeConfigResult =
   | {
@@ -27,6 +43,10 @@ const APP_CONFIG_PATH = "app-config.json";
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isStaff(value: unknown): value is Staff {
+  return typeof value === "object" && value !== null && "staffId" in value && "name" in value && "department" in value;
 }
 
 function mergeSchoolConfig(data: Partial<SchoolConfig>): SchoolConfig {
@@ -134,13 +154,13 @@ export async function loadAppConfig(): Promise<RuntimeConfigResult> {
   }
 }
 
-async function requestAppsScript<T>(config: AppConfig, action: AppsScriptAction): Promise<T> {
+async function requestAppsScript<T>(config: AppConfig, action: AppsScriptAction, requestPayload: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch(config.appsScriptUrl, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8"
     },
-    body: JSON.stringify({ action }),
+    body: JSON.stringify({ action, ...requestPayload }),
     cache: "no-store"
   });
 
@@ -148,17 +168,17 @@ async function requestAppsScript<T>(config: AppConfig, action: AppsScriptAction)
     throw new Error("학교 데이터를 불러오지 못했습니다.");
   }
 
-  const payload = (await response.json()) as AppsScriptEnvelope<T> | T;
+  const responsePayload = (await response.json()) as AppsScriptEnvelope<T> | T;
 
-  if (typeof payload === "object" && payload && "ok" in payload && payload.ok === false) {
-    throw new Error(payload.message ?? payload.error ?? "학교 데이터를 불러오지 못했습니다.");
+  if (typeof responsePayload === "object" && responsePayload && "ok" in responsePayload && responsePayload.ok === false) {
+    throw new Error(responsePayload.message ?? responsePayload.error ?? "학교 데이터를 불러오지 못했습니다.");
   }
 
-  if (typeof payload === "object" && payload && "data" in payload) {
-    return payload.data as T;
+  if (typeof responsePayload === "object" && responsePayload && "data" in responsePayload) {
+    return responsePayload.data as T;
   }
 
-  return payload as T;
+  return responsePayload as T;
 }
 
 export async function getSchoolConfig(config: AppConfig): Promise<{ data: SchoolConfig; error?: string }> {
@@ -182,6 +202,83 @@ export async function getTrainingList(config: AppConfig): Promise<{ data: Traini
     return {
       data: [],
       error: error instanceof Error ? error.message : "교육목록을 불러오지 못했습니다."
+    };
+  }
+}
+
+export async function getTrainingDetail(config: AppConfig, trainingId: string): Promise<{ data?: Training; error?: string }> {
+  try {
+    const training = await requestAppsScript<Training>(config, "getTrainingDetail", { trainingId });
+    return { data: normalizeTraining(training) };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "교육 정보를 불러오지 못했습니다."
+    };
+  }
+}
+
+export async function verifyStaff(config: AppConfig, staffQuery: string, authCode: string): Promise<{ data?: Staff; error?: string }> {
+  try {
+    const payload = await requestAppsScript<{ staff?: Staff } | Staff>(config, "verifyStaff", { staffQuery, authCode });
+    const staff = isStaff(payload) ? payload : payload.staff;
+
+    if (!staff) {
+      return { error: "교직원 정보를 확인할 수 없습니다." };
+    }
+
+    return { data: staff };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "교직원 정보를 확인할 수 없습니다."
+    };
+  }
+}
+
+export async function checkTrainingTarget(
+  config: AppConfig,
+  trainingId: string,
+  staffId: string
+): Promise<{ data?: TrainingTargetResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<TrainingTargetResult>(config, "checkTrainingTarget", { trainingId, staffId });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "교육대상 여부를 확인하지 못했습니다."
+    };
+  }
+}
+
+export async function checkDuplicateAttendance(
+  config: AppConfig,
+  trainingId: string,
+  staffId: string
+): Promise<{ data?: DuplicateAttendanceResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<DuplicateAttendanceResult>(config, "checkDuplicateAttendance", { trainingId, staffId });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "출석 기록을 확인하지 못했습니다."
+    };
+  }
+}
+
+export async function saveQrAttendance(
+  config: AppConfig,
+  trainingId: string,
+  staffId: string
+): Promise<{ data?: SaveAttendanceResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<SaveAttendanceResult>(config, "saveQrAttendance", {
+      trainingId,
+      staffId,
+      method: "QR"
+    });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "출석을 저장하지 못했습니다."
     };
   }
 }

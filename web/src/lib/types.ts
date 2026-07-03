@@ -95,6 +95,43 @@ export type SaveSignatureResult = {
   saveStatus: string;
 };
 
+export type MyTrainingStatusGroup = "completed" | "incomplete" | "review";
+
+export type MyTrainingStatusItem = {
+  trainingId: string;
+  title: string;
+  date: string;
+  time: string;
+  place: string;
+  department: string;
+  required: boolean;
+  attendanceRequired: boolean;
+  attendanceCompleted: boolean;
+  signatureRequired: boolean;
+  signatureCompleted: boolean;
+  certificateRequired: boolean;
+  certificateSubmitted: boolean;
+  certificateApproved?: boolean;
+  finalStatus: "이수완료" | "미이수" | "확인필요";
+  statusGroup: MyTrainingStatusGroup;
+  attendedAt?: string;
+  signedAt?: string;
+  certificateSubmittedAt?: string;
+};
+
+export type MyTrainingStatusSummary = {
+  total: number;
+  completed: number;
+  incomplete: number;
+  review: number;
+};
+
+export type MyTrainingStatusResult = {
+  staff: Staff;
+  summary: MyTrainingStatusSummary;
+  items: MyTrainingStatusItem[];
+};
+
 export type AppsScriptEnvelope<T> = {
   ok?: boolean;
   data?: T;

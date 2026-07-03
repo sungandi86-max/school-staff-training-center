@@ -2,6 +2,7 @@ import type {
   AppConfig,
   AppsScriptEnvelope,
   DuplicateAttendanceResult,
+  MyTrainingStatusResult,
   SaveAttendanceResult,
   SaveSignatureResult,
   SchoolConfig,
@@ -30,7 +31,8 @@ export type AppsScriptAction =
   | "checkDuplicateAttendance"
   | "saveQrAttendance"
   | "checkSignatureExists"
-  | "saveSignature";
+  | "saveSignature"
+  | "getMyTrainingStatus";
 
 export type RuntimeConfigResult =
   | {
@@ -330,6 +332,17 @@ export async function saveSignature(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "전자서명을 저장하지 못했습니다."
+    };
+  }
+}
+
+export async function getMyTrainingStatus(config: AppConfig, staffId: string): Promise<{ data?: MyTrainingStatusResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<MyTrainingStatusResult>(config, "getMyTrainingStatus", { staffId });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "내 이수현황을 불러오지 못했습니다."
     };
   }
 }

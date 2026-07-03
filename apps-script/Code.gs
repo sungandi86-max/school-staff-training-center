@@ -100,6 +100,19 @@ const SIGNATURE_COLUMNS = {
   NOTE: "비고"
 };
 
+const CERTIFICATE_COLUMNS = {
+  CERTIFICATE_ID: "제출ID",
+  TRAINING_ID: "교육ID",
+  STAFF_ID: "교직원ID",
+  STAFF_NAME: "성명",
+  SUBMITTED_AT: "제출일시",
+  FILE_URL: "이수증파일URL",
+  FILE_ID: "이수증파일ID",
+  SUBMIT_STATUS: "제출상태",
+  APPROVAL_STATUS: "승인상태",
+  NOTE: "비고"
+};
+
 const ACTIONS = {
   GET_SCHOOL_CONFIG: "getSchoolConfig",
   GET_TRAINING_LIST: "getTrainingList",
@@ -612,14 +625,19 @@ function saveSignature(payload) {
  * Read current user's training status.
  *
  * Input: { staffId: string }
- * Output: list of target trainings with attendance/signature summary.
- * TODO: Include certificate submission status if 06_이수증제출 is enabled.
+ * Output: staff-scoped target trainings with attendance/signature/certificate summary.
  */
 function getMyTrainingStatus(payload) {
   const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
 
   if (!staffId) {
     return errorResponse("교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  }
+
+  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
+
+  if (!staff || !isActiveStaff(staff)) {
+    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
   }
 
   const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
@@ -629,31 +647,94 @@ function getMyTrainingStatus(payload) {
   const trainings = readRows(SHEET_NAMES.TRAININGS);
   const attendances = readRows(SHEET_NAMES.ATTENDANCE);
   const signatures = readRows(SHEET_NAMES.SIGNATURES);
+  const certificates = readRowsOptional_(SHEET_NAMES.CERTIFICATES);
 
   const items = targets.map(function (target) {
     const trainingId = target[TARGET_COLUMNS.TRAINING_ID] || "";
     const training = findInRows_(trainings, TRAINING_COLUMNS.TRAINING_ID, trainingId);
+    const normalizedTraining = training ? normalizeTrainingRow_(training) : {
+      trainingId: trainingId,
+      title: "",
+      date: "",
+      time: "",
+      place: "",
+      location: "",
+      department: "",
+      category: "",
+      qrEnabled: true,
+      signatureRequired: false,
+      certificateRequired: false,
+      status: "",
+      activeStatus: ""
+    };
     const attendance = attendances.find(function (row) {
-      return row[ATTENDANCE_COLUMNS.TRAINING_ID] === trainingId &&
-        row[ATTENDANCE_COLUMNS.STAFF_ID] === staffId;
+      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
+        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
     });
     const signature = signatures.find(function (row) {
-      return row[SIGNATURE_COLUMNS.TRAINING_ID] === trainingId &&
-        row[SIGNATURE_COLUMNS.STAFF_ID] === staffId;
+      return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
+        String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === staffId;
+    });
+    const certificate = findCertificate_(certificates, trainingId, staffId);
+    const signatureRequired = normalizedTraining.signatureRequired && !isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]);
+    const certificateRequired = Boolean(normalizedTraining.certificateRequired);
+    const attendanceCompleted = Boolean(attendance);
+    const signatureCompleted = signatureRequired ? Boolean(signature) : true;
+    const certificateSubmitted = certificateRequired ? Boolean(certificate) : false;
+    const certificateApproved = certificate ? isApprovedCertificate_(certificate) : false;
+    const finalStatus = calculateTrainingStatus_({
+      attendanceCompleted: attendanceCompleted,
+      signatureRequired: signatureRequired,
+      signatureCompleted: signatureCompleted,
+      certificateRequired: certificateRequired,
+      certificateSubmitted: certificateSubmitted,
+      certificateApproved: certificateApproved
     });
 
     return {
       trainingId: trainingId,
-      title: training ? training[TRAINING_COLUMNS.TITLE] : "",
-      date: training ? training[TRAINING_COLUMNS.DATE] : "",
+      title: normalizedTraining.title,
+      date: normalizedTraining.date,
+      time: normalizedTraining.time,
+      place: normalizedTraining.place || normalizedTraining.location,
+      department: normalizedTraining.department,
       required: isTruthy(target[TARGET_COLUMNS.REQUIRED]),
-      completed: Boolean(attendance),
-      signatureCompleted: Boolean(signature),
-      attendedAt: attendance ? attendance[ATTENDANCE_COLUMNS.ATTENDED_AT] : ""
+      attendanceRequired: true,
+      attendanceCompleted: attendanceCompleted,
+      signatureRequired: signatureRequired,
+      signatureCompleted: signatureRequired ? Boolean(signature) : false,
+      certificateRequired: certificateRequired,
+      certificateSubmitted: certificateSubmitted,
+      certificateApproved: certificateApproved,
+      finalStatus: finalStatus.label,
+      statusGroup: finalStatus.group,
+      attendedAt: attendance ? serializeDateTime_(attendance[ATTENDANCE_COLUMNS.ATTENDED_AT]) : "",
+      signedAt: signature ? serializeDateTime_(signature[SIGNATURE_COLUMNS.SIGNED_AT]) : "",
+      certificateSubmittedAt: certificate ? serializeDateTime_(certificate[CERTIFICATE_COLUMNS.SUBMITTED_AT] || certificate["제출일"] || certificate["등록일시"]) : ""
     };
+  }).sort(function (a, b) {
+    return statusPriority_(a.statusGroup) - statusPriority_(b.statusGroup) ||
+      String(a.date || "").localeCompare(String(b.date || ""));
   });
 
-  return jsonResponse({ items: items });
+  const summary = {
+    total: items.length,
+    completed: items.filter(function (item) {
+      return item.statusGroup === "completed";
+    }).length,
+    incomplete: items.filter(function (item) {
+      return item.statusGroup === "incomplete";
+    }).length,
+    review: items.filter(function (item) {
+      return item.statusGroup === "review";
+    }).length
+  };
+
+  return jsonResponse({
+    staff: normalizeStaffRow_(staff),
+    summary: summary,
+    items: items
+  });
 }
 
 /**
@@ -882,6 +963,13 @@ function getRequiredHeadersForSheet_(sheetName) {
     ];
   }
 
+  if (sheetName === SHEET_NAMES.CERTIFICATES) {
+    return [
+      CERTIFICATE_COLUMNS.TRAINING_ID,
+      CERTIFICATE_COLUMNS.STAFF_ID
+    ];
+  }
+
   return [];
 }
 
@@ -963,6 +1051,69 @@ function findSignature_(trainingId, staffId) {
     return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
       String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === String(staffId || "").trim();
   }) || null;
+}
+
+function findCertificate_(certificates, trainingId, staffId) {
+  return certificates.find(function (row) {
+    return String(row[CERTIFICATE_COLUMNS.TRAINING_ID] || row["교육ID"] || "").trim() === String(trainingId || "").trim() &&
+      String(row[CERTIFICATE_COLUMNS.STAFF_ID] || row["교직원ID"] || "").trim() === String(staffId || "").trim();
+  }) || null;
+}
+
+function isApprovedCertificate_(certificate) {
+  const status = String(
+    certificate[CERTIFICATE_COLUMNS.APPROVAL_STATUS] ||
+      certificate[CERTIFICATE_COLUMNS.SUBMIT_STATUS] ||
+      certificate["처리상태"] ||
+      certificate["상태"] ||
+      ""
+  ).trim();
+
+  return ["승인", "승인완료", "확인완료", "완료"].indexOf(status) !== -1;
+}
+
+function calculateTrainingStatus_(state) {
+  if (!state.attendanceCompleted) {
+    return { label: "미이수", group: "incomplete" };
+  }
+
+  if (state.signatureRequired && !state.signatureCompleted) {
+    return { label: "미이수", group: "incomplete" };
+  }
+
+  if (state.certificateRequired) {
+    if (state.certificateApproved) {
+      return { label: "이수완료", group: "completed" };
+    }
+
+    if (state.certificateSubmitted) {
+      return { label: "확인필요", group: "review" };
+    }
+
+    return { label: "미이수", group: "incomplete" };
+  }
+
+  return { label: "이수완료", group: "completed" };
+}
+
+function statusPriority_(statusGroup) {
+  if (statusGroup === "incomplete") {
+    return 0;
+  }
+
+  if (statusGroup === "review") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function readRowsOptional_(sheetName) {
+  try {
+    return readRows(sheetName);
+  } catch (error) {
+    return [];
+  }
 }
 
 function getConfigMap_() {

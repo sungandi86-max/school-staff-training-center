@@ -67,6 +67,36 @@ p {
   backdrop-filter: blur(18px);
 }
 
+.attendance-shell {
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 820px;
+}
+
+.attendance-appbar {
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  min-height: 54px;
+}
+
+.attendance-appbar strong {
+  color: var(--navy);
+  font-size: 17px;
+  font-weight: 950;
+  text-align: center;
+}
+
+.attendance-start-card {
+  min-height: 260px;
+}
+
+.attendance-training-card {
+  gap: 16px;
+}
+
 .top-header {
   display: grid;
   gap: 18px;

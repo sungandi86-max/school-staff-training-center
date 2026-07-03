@@ -3,6 +3,8 @@ import type {
   AdminAttendanceStatusResult,
   AppsScriptEnvelope,
   DuplicateAttendanceResult,
+  FinalAttendanceGenerateResult,
+  FinalAttendancePreviewResult,
   MyTrainingStatusResult,
   SaveAttendanceResult,
   SaveSignatureResult,
@@ -34,7 +36,9 @@ export type AppsScriptAction =
   | "checkSignatureExists"
   | "saveSignature"
   | "getMyTrainingStatus"
-  | "getTrainingAttendanceStatus";
+  | "getTrainingAttendanceStatus"
+  | "getFinalAttendancePreview"
+  | "generateFinalAttendanceSheet";
 
 export type RuntimeConfigResult =
   | {
@@ -359,6 +363,34 @@ export async function getTrainingAttendanceStatus(
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : "교육별 출석현황을 불러오지 못했습니다."
+    };
+  }
+}
+
+export async function getFinalAttendancePreview(
+  config: AppConfig,
+  trainingId: string
+): Promise<{ data?: FinalAttendancePreviewResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<FinalAttendancePreviewResult>(config, "getFinalAttendancePreview", { trainingId });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "최종 서명부 미리보기를 불러오지 못했습니다."
+    };
+  }
+}
+
+export async function generateFinalAttendanceSheet(
+  config: AppConfig,
+  trainingId: string
+): Promise<{ data?: FinalAttendanceGenerateResult; error?: string }> {
+  try {
+    const data = await requestAppsScript<FinalAttendanceGenerateResult>(config, "generateFinalAttendanceSheet", { trainingId });
+    return { data };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "최종 서명부를 생성하지 못했습니다."
     };
   }
 }

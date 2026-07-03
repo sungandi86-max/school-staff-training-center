@@ -164,6 +164,41 @@ export type AdminAttendanceStatusResult = {
   items: AdminAttendanceStatusItem[];
 };
 
+export type FinalAttendanceRow = {
+  sequence: number;
+  trainingId: string;
+  trainingTitle: string;
+  trainingDate: string;
+  staffId?: string;
+  name: string;
+  department: string;
+  position: string;
+  attendedAt: string;
+  signatureStatus: "완료" | "필요" | "불필요";
+  signatureFileUrl: string;
+  completionStatus: "이수완료" | "서명필요" | "미이수";
+  note?: string;
+};
+
+export type FinalAttendanceSummary = {
+  targetCount: number;
+  completed: number;
+  signatureRequired: number;
+  incomplete: number;
+};
+
+export type FinalAttendancePreviewResult = {
+  training: Training;
+  summary: FinalAttendanceSummary;
+  rows: FinalAttendanceRow[];
+};
+
+export type FinalAttendanceGenerateResult = FinalAttendancePreviewResult & {
+  status: "generated";
+  generatedAt: string;
+  writtenCount: number;
+};
+
 export type AppsScriptEnvelope<T> = {
   ok?: boolean;
   data?: T;

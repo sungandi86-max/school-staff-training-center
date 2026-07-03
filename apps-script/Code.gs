@@ -113,6 +113,21 @@ const CERTIFICATE_COLUMNS = {
   NOTE: "비고"
 };
 
+const FINAL_SHEET_COLUMNS = {
+  SEQUENCE: "순번",
+  TRAINING_ID: "교육ID",
+  TRAINING_TITLE: "교육명",
+  TRAINING_DATE: "교육일자",
+  STAFF_NAME: "성명",
+  DEPARTMENT: "부서",
+  POSITION: "직위",
+  ATTENDED_AT: "출석일시",
+  SIGNATURE_STATUS: "서명여부",
+  SIGNATURE_FILE_URL: "서명파일URL",
+  COMPLETION_STATUS: "이수상태",
+  NOTE: "비고"
+};
+
 const ACTIONS = {
   GET_SCHOOL_CONFIG: "getSchoolConfig",
   GET_TRAINING_LIST: "getTrainingList",
@@ -126,6 +141,7 @@ const ACTIONS = {
   CHECK_SIGNATURE_EXISTS: "checkSignatureExists",
   GET_MY_TRAINING_STATUS: "getMyTrainingStatus",
   GET_TRAINING_ATTENDANCE_STATUS: "getTrainingAttendanceStatus",
+  GET_FINAL_ATTENDANCE_PREVIEW: "getFinalAttendancePreview",
   GENERATE_FINAL_ATTENDANCE_SHEET: "generateFinalAttendanceSheet",
   GET_ADMIN_DASHBOARD_DATA: "getAdminDashboardData"
 };
@@ -162,6 +178,10 @@ function doGet(e) {
 
   if (action === ACTIONS.GET_TRAINING_ATTENDANCE_STATUS) {
     return getTrainingAttendanceStatus(e.parameter);
+  }
+
+  if (action === ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW) {
+    return getFinalAttendancePreview(e.parameter);
   }
 
   return jsonResponse({
@@ -208,6 +228,8 @@ function doPost(e) {
         return getMyTrainingStatus(payload);
       case ACTIONS.GET_TRAINING_ATTENDANCE_STATUS:
         return getTrainingAttendanceStatus(payload);
+      case ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW:
+        return getFinalAttendancePreview(payload);
       case ACTIONS.GENERATE_FINAL_ATTENDANCE_SHEET:
         return generateFinalAttendanceSheet(payload);
       case ACTIONS.GET_ADMIN_DASHBOARD_DATA:
@@ -835,21 +857,61 @@ function getTrainingAttendanceStatus(payload) {
 }
 
 /**
- * Generate final attendance sheet.
+ * Preview final attendance roster rows.
  *
  * Input: { trainingId: string }
- * Output: placeholder response until document/spreadsheet generation is implemented.
- * TODO: Create final roster file in CONFIG_KEYS.FINAL_ROSTER_FOLDER_ID and append file URL to 08_최종서명부.
+ * Output: final attendance rows and summary without writing to 08_최종서명부.
  */
-function generateFinalAttendanceSheet(payload) {
-  if (!payload || !payload.trainingId) {
+function getFinalAttendancePreview(payload) {
+  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
+
+  if (!trainingId) {
     return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
   }
 
+  return jsonResponse(buildFinalAttendanceRoster_(trainingId));
+}
+
+/**
+ * Generate final attendance roster rows and record them to 08_최종서명부.
+ *
+ * Input: { trainingId: string }
+ * Output: final attendance rows and write count. CSV download is handled by GitHub Pages UI.
+ */
+function generateFinalAttendanceSheet(payload) {
+  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
+
+  if (!trainingId) {
+    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  }
+
+  const roster = buildFinalAttendanceRoster_(trainingId);
+  const generatedAt = new Date();
+
+  roster.rows.forEach(function (row) {
+    appendRow(SHEET_NAMES.FINAL_ROSTER, {
+      [FINAL_SHEET_COLUMNS.SEQUENCE]: row.sequence,
+      [FINAL_SHEET_COLUMNS.TRAINING_ID]: row.trainingId,
+      [FINAL_SHEET_COLUMNS.TRAINING_TITLE]: row.trainingTitle,
+      [FINAL_SHEET_COLUMNS.TRAINING_DATE]: row.trainingDate,
+      [FINAL_SHEET_COLUMNS.STAFF_NAME]: row.name,
+      [FINAL_SHEET_COLUMNS.DEPARTMENT]: row.department,
+      [FINAL_SHEET_COLUMNS.POSITION]: row.position,
+      [FINAL_SHEET_COLUMNS.ATTENDED_AT]: row.attendedAt,
+      [FINAL_SHEET_COLUMNS.SIGNATURE_STATUS]: row.signatureStatus,
+      [FINAL_SHEET_COLUMNS.SIGNATURE_FILE_URL]: row.signatureFileUrl,
+      [FINAL_SHEET_COLUMNS.COMPLETION_STATUS]: row.completionStatus,
+      [FINAL_SHEET_COLUMNS.NOTE]: row.note || "생성일시 " + serializeDateTime_(generatedAt)
+    });
+  });
+
   return jsonResponse({
-    trainingId: payload.trainingId,
-    status: "todo",
-    message: "최종 서명부 파일 생성은 다음 단계에서 구현합니다."
+    status: "generated",
+    generatedAt: serializeDateTime_(generatedAt),
+    writtenCount: roster.rows.length,
+    training: roster.training,
+    summary: roster.summary,
+    rows: roster.rows
   });
 }
 
@@ -1067,6 +1129,14 @@ function getRequiredHeadersForSheet_(sheetName) {
     ];
   }
 
+  if (sheetName === SHEET_NAMES.FINAL_ROSTER) {
+    return [
+      FINAL_SHEET_COLUMNS.SEQUENCE,
+      FINAL_SHEET_COLUMNS.TRAINING_ID,
+      FINAL_SHEET_COLUMNS.STAFF_NAME
+    ];
+  }
+
   return [];
 }
 
@@ -1215,6 +1285,110 @@ function calculateAttendanceAdminStatus_(state) {
   }
 
   return { label: "완료", group: "completed" };
+}
+
+function calculateFinalCompletionStatus_(state) {
+  if (!state.attendanceCompleted) {
+    return "미이수";
+  }
+
+  if (state.signatureRequired && !state.signatureCompleted) {
+    return "서명필요";
+  }
+
+  return "이수완료";
+}
+
+function buildFinalAttendanceRoster_(trainingId) {
+  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
+
+  if (!training) {
+    throw new Error("교육 정보를 찾을 수 없습니다.");
+  }
+
+  const normalizedTraining = normalizeTrainingRow_(training);
+  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
+    return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
+      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
+  });
+  const staffRows = readRows(SHEET_NAMES.STAFF);
+  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
+  const signatures = readRows(SHEET_NAMES.SIGNATURES);
+
+  const rows = targets.map(function (target, index) {
+    const staffId = String(target[TARGET_COLUMNS.STAFF_ID] || "").trim();
+    const staff = findInRows_(staffRows, STAFF_COLUMNS.STAFF_ID, staffId);
+    const attendance = attendances.find(function (row) {
+      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
+        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
+    });
+    const signature = signatures.find(function (row) {
+      return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
+        String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === staffId;
+    });
+    const signatureRequired = normalizedTraining.signatureRequired && !isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]);
+    const attendanceCompleted = Boolean(attendance);
+    const signatureCompleted = Boolean(signature);
+    const completionStatus = calculateFinalCompletionStatus_({
+      attendanceCompleted: attendanceCompleted,
+      signatureRequired: signatureRequired,
+      signatureCompleted: signatureCompleted
+    });
+
+    return {
+      sequence: index + 1,
+      trainingId: trainingId,
+      trainingTitle: normalizedTraining.title,
+      trainingDate: normalizedTraining.date,
+      staffId: staffId,
+      name: staff ? staff[STAFF_COLUMNS.NAME] || "" : "",
+      department: staff ? staff[STAFF_COLUMNS.DEPARTMENT] || "" : "",
+      position: staff ? staff[STAFF_COLUMNS.POSITION] || "" : "",
+      attendedAt: attendance ? serializeDateTime_(attendance[ATTENDANCE_COLUMNS.ATTENDED_AT]) : "",
+      signatureStatus: signatureRequired ? (signatureCompleted ? "완료" : "필요") : "불필요",
+      signatureFileUrl: signature ? signature[SIGNATURE_COLUMNS.FILE_URL] || "" : "",
+      completionStatus: completionStatus,
+      note: ""
+    };
+  }).sort(function (a, b) {
+    return finalStatusPriority_(a.completionStatus) - finalStatusPriority_(b.completionStatus) ||
+      String(a.department || "").localeCompare(String(b.department || "")) ||
+      String(a.name || "").localeCompare(String(b.name || ""));
+  }).map(function (row, index) {
+    row.sequence = index + 1;
+    return row;
+  });
+
+  const summary = {
+    targetCount: rows.length,
+    completed: rows.filter(function (row) {
+      return row.completionStatus === "이수완료";
+    }).length,
+    signatureRequired: rows.filter(function (row) {
+      return row.completionStatus === "서명필요";
+    }).length,
+    incomplete: rows.filter(function (row) {
+      return row.completionStatus === "미이수";
+    }).length
+  };
+
+  return {
+    training: normalizedTraining,
+    summary: summary,
+    rows: rows
+  };
+}
+
+function finalStatusPriority_(status) {
+  if (status === "미이수") {
+    return 0;
+  }
+
+  if (status === "서명필요") {
+    return 1;
+  }
+
+  return 2;
 }
 
 function adminStatusPriority_(statusGroup) {

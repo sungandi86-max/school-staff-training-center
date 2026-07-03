@@ -622,6 +622,10 @@ p {
   border-bottom: 0;
 }
 
+.final-sheet-table {
+  min-width: 720px;
+}
+
 .admin-attendance-cards {
   display: grid;
   gap: 14px;

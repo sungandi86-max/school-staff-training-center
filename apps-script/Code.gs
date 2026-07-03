@@ -149,6 +149,7 @@ const ACTIONS = {
   SAVE_SIGNATURE: "saveSignature",
   CHECK_SIGNATURE_EXISTS: "checkSignatureExists",
   GET_MY_TRAINING_STATUS: "getMyTrainingStatus",
+  GET_MY_TRAINING_STATUS_BY_NAME_DEPT: "getMyTrainingStatusByNameDept",
   GET_TRAINING_ATTENDANCE_STATUS: "getTrainingAttendanceStatus",
   GET_FINAL_ATTENDANCE_PREVIEW: "getFinalAttendancePreview",
   GENERATE_FINAL_ATTENDANCE_SHEET: "generateFinalAttendanceSheet",
@@ -251,6 +252,8 @@ function doPost(e) {
         return checkSignatureExists(payload);
       case ACTIONS.GET_MY_TRAINING_STATUS:
         return getMyTrainingStatus(payload);
+      case ACTIONS.GET_MY_TRAINING_STATUS_BY_NAME_DEPT:
+        return getMyTrainingStatusByNameDept(payload);
       case ACTIONS.GET_TRAINING_ATTENDANCE_STATUS:
         return getTrainingAttendanceStatus(payload);
       case ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW:
@@ -995,6 +998,48 @@ function getMyTrainingStatus(payload) {
     return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
   }
 
+  return buildMyTrainingStatusResponse_(staff);
+}
+
+/**
+ * Read current user's training status by name and optional department.
+ *
+ * Input: { name: string, department?: string }
+ * Output: one staff member's target trainings with attendance/signature/certificate summary.
+ */
+function getMyTrainingStatusByNameDept(payload) {
+  const name = payload && payload.name ? String(payload.name).trim() : "";
+  const department = payload && payload.department ? String(payload.department).trim() : "";
+
+  if (!name) {
+    return errorResponse("성명을 입력해주세요.", "MISSING_STAFF_NAME");
+  }
+
+  const matchesByName = readRows(SHEET_NAMES.STAFF).filter(function (row) {
+    return isActiveStaff(row) && String(row[STAFF_COLUMNS.NAME] || "").trim() === name;
+  });
+
+  if (!matchesByName.length) {
+    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  }
+
+  const matches = department ? matchesByName.filter(function (row) {
+    return String(row[STAFF_COLUMNS.DEPARTMENT] || "").trim() === department;
+  }) : matchesByName;
+
+  if (!matches.length) {
+    return errorResponse("성명과 소속부서를 확인해 주세요.", "STAFF_NOT_FOUND");
+  }
+
+  if (matches.length > 1) {
+    return errorResponse("동명이인이 있습니다. 소속부서를 입력해 주세요.", "DUPLICATE_STAFF_NAME");
+  }
+
+  return buildMyTrainingStatusResponse_(matches[0]);
+}
+
+function buildMyTrainingStatusResponse_(staff) {
+  const staffId = String(staff[STAFF_COLUMNS.STAFF_ID] || "").trim();
   const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
     return String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
       isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
@@ -1076,6 +1121,12 @@ function getMyTrainingStatus(payload) {
     total: items.length,
     completed: items.filter(function (item) {
       return item.statusGroup === "completed";
+    }).length,
+    certificateSubmitted: items.filter(function (item) {
+      return item.certificateRequired && item.certificateSubmitted;
+    }).length,
+    certificateMissing: items.filter(function (item) {
+      return item.certificateRequired && !item.certificateSubmitted;
     }).length,
     incomplete: items.filter(function (item) {
       return item.statusGroup === "incomplete";

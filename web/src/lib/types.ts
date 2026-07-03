@@ -150,6 +150,8 @@ export type MyTrainingStatusItem = {
 export type MyTrainingStatusSummary = {
   total: number;
   completed: number;
+  certificateSubmitted: number;
+  certificateMissing: number;
   incomplete: number;
   review: number;
 };

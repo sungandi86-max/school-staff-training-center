@@ -17,6 +17,7 @@ import type {
   Training,
   TrainingTargetResult
 } from "@/lib/types";
+import { getAssetPath } from "@/lib/paths";
 
 export const DEFAULT_CONFIG: SchoolConfig = {
   schoolName: "학교명 미설정",
@@ -62,7 +63,7 @@ export type RuntimeConfigResult =
       message: string;
     };
 
-const APP_CONFIG_PATH = "app-config.json";
+const APP_CONFIG_PATH = getAssetPath("app-config.json");
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;

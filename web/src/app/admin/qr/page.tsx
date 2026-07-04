@@ -312,6 +312,7 @@ export default function AdminQrPage() {
       <main className="page admin-qr-page">
       <div className="dashboard-shell">
         <div className="route-actions print-hidden">
+          <span className="page-toolbar-title">QR 출력</span>
           <a className="ghost-button" href={`${APP_BASE_PATH}/`}>
             홈으로
           </a>

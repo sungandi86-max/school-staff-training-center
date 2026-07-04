@@ -199,6 +199,7 @@ export default function AdminSettingsPage() {
       <main className="page" style={previewStyle}>
       <div className="dashboard-shell">
         <div className="route-actions">
+          <span className="page-toolbar-title">설정 관리</span>
           <a className="ghost-button" href={`${APP_BASE_PATH}/admin/`}>
             관리자 메뉴로
           </a>

@@ -316,7 +316,7 @@ export default function HomePage() {
 
   return (
     <main className="page" style={themeStyle}>
-      <div className="dashboard-shell">
+      <div className="dashboard-shell home-shell">
         <header className="top-header">
           <div className="brand-group">
             <div className="brand-logo" aria-hidden="true">

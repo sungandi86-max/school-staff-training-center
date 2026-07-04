@@ -159,6 +159,7 @@ export default function SetupPage() {
     <main className="page">
       <div className="dashboard-shell">
         <div className="route-actions">
+          <span className="page-toolbar-title">설치 마법사</span>
           <a className="ghost-button" href={`${APP_BASE_PATH}/`}>
             홈으로
           </a>

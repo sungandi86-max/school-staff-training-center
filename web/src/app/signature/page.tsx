@@ -312,6 +312,7 @@ export default function SignaturePage() {
     <main className="page">
       <div className="dashboard-shell">
         <div className="route-actions">
+          <span className="page-toolbar-title">전자서명</span>
           <a className="ghost-button" href={`${APP_BASE_PATH}/`}>
             홈으로
           </a>

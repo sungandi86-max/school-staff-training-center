@@ -104,6 +104,7 @@ export default function MyStatusPage() {
     <main className="page">
       <div className="dashboard-shell">
         <div className="route-actions">
+          <span className="page-toolbar-title">내 이수현황</span>
           <button className="ghost-button" onClick={() => window.history.back()} type="button">
             뒤로가기
           </button>

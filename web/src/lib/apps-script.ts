@@ -700,7 +700,7 @@ function normalizeTraining(training: Partial<Training>): Training {
     department: training.department ?? "",
     category: training.category ?? "",
     qrEnabled: Boolean(training.qrEnabled),
-    signatureRequired: Boolean(training.signatureRequired),
+    signatureRequired: training.signatureRequired === undefined ? true : Boolean(training.signatureRequired),
     certificateRequired: Boolean(training.certificateRequired),
     status,
     activeStatus: status,
@@ -709,6 +709,8 @@ function normalizeTraining(training: Partial<Training>): Training {
     signatureFolderId: training.signatureFolderId ?? "",
     certificateFolderId: training.certificateFolderId ?? "",
     finalRosterFolderId: training.finalRosterFolderId ?? "",
+    finalRosterFileId: training.finalRosterFileId ?? "",
+    finalRosterFileUrl: training.finalRosterFileUrl ?? "",
     note: training.note ?? ""
   };
 }

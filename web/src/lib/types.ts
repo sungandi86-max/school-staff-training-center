@@ -55,6 +55,8 @@ export type Training = {
   signatureFolderId?: string;
   certificateFolderId?: string;
   finalRosterFolderId?: string;
+  finalRosterFileId?: string;
+  finalRosterFileUrl?: string;
   note?: string;
 };
 
@@ -310,6 +312,7 @@ export type FinalAttendanceRow = {
   attendedAt: string;
   signatureStatus: "완료" | "필요" | "불필요";
   signatureFileUrl: string;
+  signedAt?: string;
   completionStatus: "이수완료" | "서명필요" | "미이수";
   note?: string;
 };
@@ -331,6 +334,8 @@ export type FinalAttendanceGenerateResult = FinalAttendancePreviewResult & {
   status: "generated";
   generatedAt: string;
   writtenCount: number;
+  fileId?: string;
+  fileUrl?: string;
 };
 
 export type SetupFolderCheck = {

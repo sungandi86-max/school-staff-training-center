@@ -1,18 +1,18 @@
 "use client";
 
 import {
-  checkDuplicateAttendance,
+  checkSignatureExists,
   checkTrainingTarget,
   getStaffByNameDept,
   getTrainingDetail,
   loadAppConfig,
-  saveQrAttendance
+  saveBulkSignature
 } from "@/lib/apps-script";
 import { getBasePath } from "@/lib/paths";
-import type { AppConfig, DuplicateAttendanceResult, SaveAttendanceResult, Staff, Training, TrainingTargetResult } from "@/lib/types";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import type { AppConfig, BulkSignatureResult, SignatureExistsResult, Staff, Training, TrainingTargetResult } from "@/lib/types";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent } from "react";
 
-type AttendanceStep = "loading" | "scan-guide" | "ready" | "submitting" | "complete" | "blocked";
+type AttendanceStep = "loading" | "scan-guide" | "ready" | "submitting" | "signature" | "saving-signature" | "complete" | "blocked";
 
 function CheckIcon() {
   return (
@@ -48,10 +48,6 @@ function pageHref(path: string) {
   return path === "/" ? `${basePath}/` : `${basePath}${path}`;
 }
 
-function signatureUrl(trainingId: string, staffId: string) {
-  return `${pageHref("/signature")}?${new URLSearchParams({ trainingId, staffId }).toString()}`;
-}
-
 function isActiveTraining(training?: Training) {
   const status = (training?.status ?? training?.activeStatus ?? "").trim().toLowerCase();
   return ["활성", "진행중", "준비중", "active", "ready", "y", "yes", "사용"].includes(status);
@@ -69,7 +65,24 @@ function getFriendlyError(fallback: string, error?: string) {
   return error?.trim() || fallback;
 }
 
+function getCanvasContext(canvas: HTMLCanvasElement) {
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = "#0f172a";
+  context.lineWidth = 3.25;
+
+  return context;
+}
+
 export default function AttendancePage() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
   const [runtimeConfig, setRuntimeConfig] = useState<AppConfig>();
   const [trainingId, setTrainingId] = useState("");
   const [training, setTraining] = useState<Training>();
@@ -77,8 +90,9 @@ export default function AttendancePage() {
   const [department, setDepartment] = useState("");
   const [staff, setStaff] = useState<Staff>();
   const [targetResult, setTargetResult] = useState<TrainingTargetResult>();
-  const [duplicateResult, setDuplicateResult] = useState<DuplicateAttendanceResult>();
-  const [saveResult, setSaveResult] = useState<SaveAttendanceResult>();
+  const [signatureExists, setSignatureExists] = useState<SignatureExistsResult>();
+  const [bulkResult, setBulkResult] = useState<BulkSignatureResult>();
+  const [hasSignature, setHasSignature] = useState(false);
   const [step, setStep] = useState<AttendanceStep>("loading");
   const [message, setMessage] = useState("QR 출석 정보를 불러오는 중입니다.");
 
@@ -135,7 +149,7 @@ export default function AttendancePage() {
         return;
       }
 
-      setMessage("성명과 소속부서를 입력하면 교육대상 여부를 확인한 뒤 출석을 저장합니다.");
+      setMessage("성명과 소속부서를 입력하면 교육대상 확인 후 전자서명을 진행합니다.");
       setStep("ready");
     }
 
@@ -146,11 +160,52 @@ export default function AttendancePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (step !== "signature") {
+      return;
+    }
+
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    function resizeCanvas() {
+      const nextCanvas = canvasRef.current;
+
+      if (!nextCanvas) {
+        return;
+      }
+
+      const rect = nextCanvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      nextCanvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      nextCanvas.height = Math.max(1, Math.floor(rect.height * ratio));
+
+      const context = getCanvasContext(nextCanvas);
+      if (context) {
+        context.scale(ratio, ratio);
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, rect.width, rect.height);
+      }
+    }
+
+    resizeCanvas();
+    const observer = new ResizeObserver(resizeCanvas);
+    observer.observe(canvas);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [step]);
+
   const isTrainingMode = Boolean(trainingId);
   const canSubmitAttendance = useMemo(
     () => Boolean(runtimeConfig && training && staffName.trim() && department.trim() && step !== "submitting" && step !== "complete"),
     [department, runtimeConfig, staffName, step, training]
   );
+  const canSaveSignature = Boolean(runtimeConfig && training && staff && hasSignature && step === "signature");
 
   async function handleAttendanceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,9 +218,10 @@ export default function AttendancePage() {
     setStep("submitting");
     setStaff(undefined);
     setTargetResult(undefined);
-    setDuplicateResult(undefined);
-    setSaveResult(undefined);
-    setMessage("본인 정보와 출석 가능 여부를 확인하고 있습니다.");
+    setSignatureExists(undefined);
+    setBulkResult(undefined);
+    setHasSignature(false);
+    setMessage("본인 정보와 교육대상 여부를 확인하고 있습니다.");
 
     const staffResult = await getStaffByNameDept(runtimeConfig, staffName.trim(), department.trim());
 
@@ -186,45 +242,134 @@ export default function AttendancePage() {
       return;
     }
 
-    const duplicate = await checkDuplicateAttendance(runtimeConfig, training.trainingId, staffResult.data.staffId);
-    setDuplicateResult(duplicate.data);
-
-    if (duplicate.error || !duplicate.data) {
+    if (target.data.signatureExcluded) {
       setStep("ready");
-      setMessage(getFriendlyError("기존 출석 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", duplicate.error));
+      setMessage("이 교육은 서명 제외 대상입니다. 담당자에게 확인해 주세요.");
       return;
     }
 
-    if (duplicate.data.duplicate) {
-      setStep("complete");
-      setMessage("이미 출석한 기록이 있습니다. 중복 저장하지 않았습니다.");
-      return;
-    }
+    const signature = await checkSignatureExists(runtimeConfig, training.trainingId, staffResult.data.staffId);
+    setSignatureExists(signature.data);
 
-    setMessage("출석을 저장하고 있습니다.");
-    const result = await saveQrAttendance(runtimeConfig, training.trainingId, staffResult.data.staffId);
-
-    if (result.error || !result.data) {
+    if (signature.error || !signature.data) {
       setStep("ready");
-      setMessage(getFriendlyError("출석 저장에 실패했습니다. 다시 시도해 주세요.", result.error));
+      setMessage(getFriendlyError("기존 전자서명 기록을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", signature.error));
       return;
     }
 
-    if (result.data.duplicate || result.data.status === "already") {
-      setDuplicateResult({
-        attendanceId: result.data.attendanceId,
-        attendedAt: result.data.attendedAt,
-        duplicate: true,
-        processStatus: result.data.processStatus
-      });
+    if (signature.data.exists) {
       setStep("complete");
-      setMessage("이미 출석한 기록이 있어 새로 저장하지 않았습니다.");
+      setMessage("이미 출석 및 전자서명이 완료된 교육입니다.");
       return;
     }
 
-    setSaveResult(result.data);
+    setStep("signature");
+    setMessage("아래 서명란에 서명한 뒤 전자서명을 제출해 주세요.");
+  }
+
+  function pointerPosition(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+  function handlePointerDown(event: PointerEvent<HTMLCanvasElement>) {
+    if (step !== "signature") {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drawingRef.current = true;
+
+    const context = getCanvasContext(event.currentTarget);
+    const point = pointerPosition(event);
+
+    if (context) {
+      context.beginPath();
+      context.moveTo(point.x, point.y);
+    }
+  }
+
+  function handlePointerMove(event: PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    const context = getCanvasContext(event.currentTarget);
+    const point = pointerPosition(event);
+
+    if (context) {
+      context.lineTo(point.x, point.y);
+      context.stroke();
+      setHasSignature(true);
+    }
+  }
+
+  function handlePointerUp(event: PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    drawingRef.current = false;
+  }
+
+  function handleClearSignature() {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const context = getCanvasContext(canvas);
+
+    if (context) {
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, rect.width, rect.height);
+    }
+
+    setHasSignature(false);
+    setMessage("서명란을 다시 작성해 주세요.");
+  }
+
+  async function handleSaveSignature() {
+    const canvas = canvasRef.current;
+
+    if (!runtimeConfig || !training || !staff || !canvas) {
+      setMessage("전자서명 저장에 필요한 정보를 다시 확인해 주세요.");
+      return;
+    }
+
+    if (!hasSignature) {
+      setMessage("서명 후 제출할 수 있습니다.");
+      return;
+    }
+
+    setStep("saving-signature");
+    setMessage("전자서명을 저장하고 있습니다.");
+
+    const result = await saveBulkSignature(runtimeConfig, staff.staffId, [training.trainingId], canvas.toDataURL("image/png"), training.date);
+
+    if (result.error || !result.data || result.data.status === "skipped") {
+      setStep("signature");
+      setMessage(result.error || result.data?.skipped[0]?.reason || "전자서명 저장에 실패했습니다. 다시 시도해 주세요.");
+      return;
+    }
+
+    setBulkResult(result.data);
     setStep("complete");
-    setMessage("출석이 완료되었습니다.");
+    setMessage("출석 및 전자서명이 완료되었습니다.");
   }
 
   return (
@@ -274,12 +419,12 @@ export default function AttendancePage() {
               </div>
             </section>
 
-            {training && step !== "blocked" ? (
+            {training && step !== "blocked" && !staff ? (
               <section aria-label="본인 확인" className="training-section">
                 <div className="section-head">
                   <div>
                     <h2>본인 확인</h2>
-                    <p>성명과 소속부서로 교육대상 여부를 확인하고 출석을 저장합니다. 동명이인이 있을 때는 소속부서를 입력해 주세요.</p>
+                    <p>성명과 소속부서로 본인과 교육대상 여부를 확인합니다.</p>
                   </div>
                 </div>
 
@@ -295,77 +440,71 @@ export default function AttendancePage() {
                   </label>
 
                   <button className="primary-action" disabled={!canSubmitAttendance} type="submit">
-                    {step === "submitting" ? "출석 처리 중" : "출석하기"}
+                    {step === "submitting" ? "확인 중" : "확인하기"}
                   </button>
                 </form>
               </section>
             ) : null}
 
             {staff ? (
-              <section aria-label="출석 확인 결과" className="training-section">
+              <section aria-label="본인 확인 결과" className="training-section">
                 <div className="section-head">
                   <div>
-                    <h2>출석 확인 결과</h2>
+                    <h2>본인 확인 결과</h2>
                     <p>
                       {staff.name} · {staff.department || "소속부서 미입력"} {staff.position ? `· ${staff.position}` : ""}
                     </p>
                   </div>
                   <div className="badge-row">
                     <span>{targetResult?.isTarget ? "교육대상" : "대상 아님"}</span>
-                    <span>{duplicateResult?.duplicate ? "이미 출석" : saveResult ? "출석 완료" : "확인 중"}</span>
+                    <span>{signatureExists?.exists ? "서명 완료" : step === "signature" || step === "saving-signature" ? "서명 대기" : "확인 완료"}</span>
                   </div>
                 </div>
-
-                {duplicateResult?.duplicate ? (
-                  <div className="soft-alert" role="status">
-                    기존 출석 기록이 있습니다. {duplicateResult.attendedAt ? `출석일시: ${duplicateResult.attendedAt}` : ""}
-                  </div>
-                ) : null}
               </section>
             ) : null}
 
-            {step === "complete" && saveResult ? (
-              <section aria-label="출석 완료" className="today-card">
+            {step === "signature" || step === "saving-signature" ? (
+              <section aria-label="전자서명 입력" className="training-section">
+                <div className="section-head">
+                  <div>
+                    <h2>전자서명</h2>
+                    <p>서명은 출석 및 교육 이수 증빙으로 저장됩니다.</p>
+                  </div>
+                </div>
+
+                <canvas
+                  ref={canvasRef}
+                  aria-label="전자서명 입력"
+                  className="signature-canvas"
+                  onPointerCancel={handlePointerUp}
+                  onPointerDown={handlePointerDown}
+                  onPointerLeave={handlePointerUp}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                />
+
+                <div className="signature-actions">
+                  <button className="ghost-button" disabled={step === "saving-signature"} onClick={handleClearSignature} type="button">
+                    다시쓰기
+                  </button>
+                  <button className="primary-action" disabled={!canSaveSignature} onClick={handleSaveSignature} type="button">
+                    {step === "saving-signature" ? "저장 중" : "전자서명 제출"}
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
+            {step === "complete" && (bulkResult || signatureExists?.exists) ? (
+              <section aria-label="출석 및 전자서명 완료" className="today-card">
                 <div className="today-copy">
                   <div className="section-kicker">
                     <CheckIcon />
-                    <span>출석 완료</span>
+                    <span>완료</span>
                   </div>
-                  <h2>출석 기록이 저장되었습니다.</h2>
+                  <h2>출석 및 전자서명이 완료되었습니다.</h2>
                   <p>
-                    {saveResult.trainingTitle || training?.title} · {saveResult.attendedAt}
+                    {training?.title || "교육"} · {bulkResult?.signedAt || signatureExists?.signedAt || "저장 완료"}
                   </p>
-                  {saveResult.signatureRequired && staff && training ? (
-                    <>
-                      <p>이 교육은 전자서명이 필요합니다. 아래 버튼을 눌러 서명을 이어서 제출해 주세요.</p>
-                      <a className="primary-action" href={signatureUrl(training.trainingId, staff.staffId)}>
-                        전자서명하기
-                      </a>
-                    </>
-                  ) : (
-                    <p>전자서명이 필요하지 않은 교육입니다. 출석 처리가 완료되었습니다.</p>
-                  )}
-                  <div className="route-actions">
-                    <a className="ghost-button" href={pageHref("/my-status")}>
-                      내 이수현황 보기
-                    </a>
-                    <a className="ghost-button" href={pageHref("/")}>
-                      홈으로
-                    </a>
-                  </div>
-                </div>
-              </section>
-            ) : null}
-
-            {step === "complete" && duplicateResult?.duplicate && !saveResult ? (
-              <section aria-label="중복 출석 안내" className="today-card">
-                <div className="today-copy">
-                  <div className="section-kicker">
-                    <CheckIcon />
-                    <span>출석 확인</span>
-                  </div>
-                  <h2>이미 출석한 교육입니다.</h2>
-                  <p>중복 출석은 저장하지 않았습니다. 필요하면 담당자에게 문의해 주세요.</p>
                   <div className="route-actions">
                     <a className="ghost-button" href={pageHref("/my-status")}>
                       내 이수현황 보기

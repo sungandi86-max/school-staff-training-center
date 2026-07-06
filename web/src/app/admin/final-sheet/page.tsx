@@ -29,7 +29,7 @@ function quoteCsv(value: string | number | undefined) {
 }
 
 function buildCsv(rows: FinalAttendanceRow[]) {
-  const header = ["순번", "교육ID", "교육명", "교육일자", "성명", "부서", "직위", "출석일시", "서명여부", "서명파일URL", "이수상태", "비고"];
+  const header = ["순번", "교육ID", "교육명", "교육일자", "성명", "소속부서", "직책", "서명여부", "서명파일URL", "서명일시", "이수상태", "비고"];
   const body = rows.map((row) => [
     row.sequence,
     row.trainingId,
@@ -38,9 +38,9 @@ function buildCsv(rows: FinalAttendanceRow[]) {
     row.name,
     row.department,
     row.position,
-    row.attendedAt,
     row.signatureStatus,
     row.signatureFileUrl,
+    row.signedAt ?? row.attendedAt,
     row.completionStatus,
     row.note ?? ""
   ]);
@@ -187,7 +187,7 @@ export default function AdminFinalSheetPage() {
       summary: result.data.summary,
       rows: result.data.rows
     });
-    setMessage(`08_최종서명부에 ${result.data.writtenCount}건을 기록하고 CSV를 다운로드했습니다.`);
+    setMessage(`08_최종서명부에 ${result.data.writtenCount}건을 기록하고 CSV를 다운로드했습니다.${result.data.fileUrl ? " 생성 파일 URL도 교육목록에 저장했습니다." : ""}`);
     setIsGenerating(false);
   }
 
@@ -213,7 +213,7 @@ export default function AdminFinalSheetPage() {
               <span>최종 서명부</span>
             </div>
             <h1>감사·증빙용 최종 서명부를 생성합니다.</h1>
-            <p>교육별 대상자의 출석과 전자서명 기록을 기준으로 CSV 서명부를 다운로드합니다.</p>
+            <p>교육별 대상자 명단에 전자서명 기록을 붙여 최종 서명부를 생성합니다.</p>
           </div>
         </section>
 
@@ -306,8 +306,9 @@ export default function AdminFinalSheetPage() {
                             <th>성명</th>
                             <th>부서</th>
                             <th>직위</th>
-                            <th>출석일시</th>
                             <th>서명여부</th>
+                            <th>서명일시</th>
+                            <th>서명파일</th>
                             <th>이수상태</th>
                           </tr>
                         </thead>
@@ -318,8 +319,9 @@ export default function AdminFinalSheetPage() {
                               <td>{row.name || "-"}</td>
                               <td>{row.department || "-"}</td>
                               <td>{row.position || "-"}</td>
-                              <td>{row.attendedAt || "-"}</td>
                               <td>{row.signatureStatus}</td>
+                              <td>{row.signedAt || row.attendedAt || "-"}</td>
+                              <td>{row.signatureFileUrl ? "저장됨" : "-"}</td>
                               <td>
                                 <span className={statusClassName(row.completionStatus)}>{row.completionStatus}</span>
                               </td>
@@ -344,10 +346,11 @@ export default function AdminFinalSheetPage() {
                             <span className={statusClassName(row.completionStatus)}>{row.completionStatus}</span>
                           </div>
                           <div className="badge-row">
-                            <span>{row.attendedAt ? "출석 완료" : "미출석"}</span>
+                            <span>{row.signatureStatus === "완료" ? "서명 완료" : "서명 필요"}</span>
                             <span>서명 {row.signatureStatus}</span>
                           </div>
-                          {row.attendedAt ? <p>출석일시: {row.attendedAt}</p> : null}
+                          {row.signedAt || row.attendedAt ? <p>서명일시: {row.signedAt || row.attendedAt}</p> : null}
+                          {row.signatureFileUrl ? <p>서명파일URL: {row.signatureFileUrl}</p> : null}
                         </article>
                       ))}
                     </div>

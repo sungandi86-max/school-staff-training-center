@@ -467,7 +467,7 @@ export default function SignaturePage() {
               <span>전자서명</span>
             </div>
             <h1>{training?.title ?? "전자서명"}</h1>
-            <p>{singleMode ? "QR 출석 완료 후 전자서명을 진행해 주세요." : "서명이 필요한 교육을 확인하고 전자서명을 제출합니다."}</p>
+            <p>{singleMode ? "전자서명 제출로 출석과 이수 증빙을 완료합니다." : "서명이 필요한 교육을 확인하고 전자서명을 제출합니다."}</p>
           </div>
         </section>
 
@@ -614,7 +614,7 @@ export default function SignaturePage() {
                               />
                             </div>
                             <div className="badge-row">
-                              <span>{item.attendanceDone ? "출석 완료" : item.attendanceRequired ? "출석 필요" : "출석 확인 없음"}</span>
+                              <span>{item.signatureDone ? "출석 인정" : "서명 제출 시 출석 인정"}</span>
                               <span>{item.signatureDone ? "서명 완료" : "서명 필요"}</span>
                               {!item.selectable && item.blockedReason ? <span>{item.blockedReason}</span> : null}
                             </div>

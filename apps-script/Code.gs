@@ -1,82 +1,87 @@
 /**
- * School Staff Training Center - Apps Script skeleton
+ * School Health Hub - Hub Sheet v1.1 Apps Script API
  *
- * This file is the first scaffold for the shared school staff training center template.
- * It is intended to be bound to each school's Google Sheet.
- *
- * Privacy rule:
- * - Store staff lists, attendance records, and signature file links only in the school's Google Sheet/Drive.
- * - Do not store sensitive staff data on GitHub Pages or Vercel.
- * - Return only the minimum fields required by the UI.
+ * Data is stored only in the school's Google Sheet and Google Drive.
+ * General staff flows never use or expose authentication codes.
+ * adminCode is read only for verifyAdminCode() and is never returned.
  */
 
-const SHEET_NAMES = {
+const SHEETS = {
   CONFIG: "00_학교설정",
   TRAININGS: "01_교육목록",
   STAFF: "02_교직원명단",
   TARGETS: "03_교육대상",
   ATTENDANCE: "04_QR출석기록",
   SIGNATURES: "05_전자서명기록",
-  CERTIFICATES: "06_이수증제출",
-  MY_STATUS: "07_내이수현황",
+  CERTIFICATES: "06_이수증업로드",
+  UPLOAD_STATUS_VIEW: "07_업로드상태_VIEW",
   FINAL_ROSTER: "08_최종서명부",
+  NOTICES: "09_공지사항",
+  DEPARTMENTS: "10_부서관리",
+  TARGET_MEMO: "11_교육대상_설계메모",
   CODE_VALUES: "99_코드값"
 };
 
-const CONFIG_KEYS = {
-  SCHOOL_NAME: "학교명",
-  CENTER_NAME: "교육센터명",
-  SCHOOL_LOGO_URL: "학교로고URL",
-  PRIMARY_COLOR: "메인컬러",
-  SECONDARY_COLOR: "보조컬러",
-  DEPARTMENT_NAME: "담당부서명",
-  MANAGER_NAME: "담당자명",
-  MANAGER_CONTACT: "담당자 연락처",
-  SIGNATURE_FOLDER_ID: "전자서명 저장 폴더 ID",
-  FINAL_ROSTER_FOLDER_ID: "최종 서명부 저장 폴더 ID",
-  CERTIFICATE_FOLDER_ID: "이수증 저장 폴더 ID",
-  PRIVACY_NOTICE: "개인정보 안내문",
-  ADMIN_CODE: "관리자코드",
-  ACTIVE_SEMESTER: "운영학기"
+const CONFIG = {
+  KEY: "설정키",
+  VALUE: "설정값",
+  SCHOOL_NAME: "schoolName",
+  CENTER_NAME: "centerName",
+  LOGO_URL: "logoUrl",
+  PRIMARY_COLOR: "primaryColor",
+  SECONDARY_COLOR: "secondaryColor",
+  OWNER_DEPARTMENT: "ownerDepartment",
+  OWNER_NAME: "ownerName",
+  OWNER_CONTACT: "ownerContact",
+  SIGNATURE_FOLDER_ID: "signatureFolderId",
+  CERTIFICATE_FOLDER_ID: "certificateFolderId",
+  FINAL_ROSTER_FOLDER_ID: "finalRosterFolderId",
+  PRIVACY_NOTICE: "privacyNotice",
+  ADMIN_CODE: "adminCode",
+  ACTIVE_SEMESTER: "activeSemester"
 };
 
-const TRAINING_COLUMNS = {
-  TRAINING_ID: "교육ID",
+const TRAINING = {
+  ID: "교육ID",
   TITLE: "교육명",
   DATE: "교육일자",
   TIME: "교육시간",
-  LOCATION: "장소",
+  PLACE: "장소",
   DEPARTMENT: "담당부서",
   CATEGORY: "교육구분",
   QR_ENABLED: "QR사용여부",
   SIGNATURE_REQUIRED: "전자서명필요여부",
   CERTIFICATE_REQUIRED: "이수증제출필요여부",
-  ACTIVE_STATUS: "활성상태",
+  STATUS: "활성상태",
+  FOLDER_MODE: "folderMode",
+  DRIVE_FOLDER_ID: "driveFolderId",
+  SIGNATURE_FOLDER_ID: "signatureFolderId",
+  CERTIFICATE_FOLDER_ID: "certificateFolderId",
+  FINAL_ROSTER_FOLDER_ID: "finalRosterFolderId",
   NOTE: "비고"
 };
 
-const STAFF_COLUMNS = {
-  STAFF_ID: "교직원ID",
+const STAFF = {
+  ID: "교직원ID",
   NAME: "성명",
   DEPARTMENT: "부서",
   POSITION: "직위",
-  AUTH_CODE: "인증코드",
-  EMPLOYMENT_STATUS: "재직상태",
+  STATUS: "재직상태",
   ROLE: "권한",
   NOTE: "비고"
 };
 
-const TARGET_COLUMNS = {
+const TARGET = {
   TRAINING_ID: "교육ID",
   STAFF_ID: "교직원ID",
   IS_TARGET: "대상여부",
-  SIGNATURE_EXCLUDED: "서명제외여부",
   REQUIRED: "필수여부",
+  SIGNATURE_EXCLUDED: "서명제외여부",
   NOTE: "비고"
 };
 
-const ATTENDANCE_COLUMNS = {
-  ATTENDANCE_ID: "출석ID",
+const ATTENDANCE = {
+  ID: "출석ID",
   TRAINING_ID: "교육ID",
   TRAINING_TITLE: "교육명",
   STAFF_ID: "교직원ID",
@@ -85,13 +90,13 @@ const ATTENDANCE_COLUMNS = {
   ATTENDED_AT: "출석일시",
   METHOD: "출석방법",
   DUPLICATE: "중복여부",
-  PROCESS_STATUS: "처리상태",
+  STATUS: "처리상태",
   RECORDER: "기록자",
   NOTE: "비고"
 };
 
-const SIGNATURE_COLUMNS = {
-  SIGNATURE_ID: "서명ID",
+const SIGNATURE = {
+  ID: "서명ID",
   TRAINING_ID: "교육ID",
   TRAINING_TITLE: "교육명",
   STAFF_ID: "교직원ID",
@@ -100,12 +105,12 @@ const SIGNATURE_COLUMNS = {
   SIGNED_AT: "서명일시",
   FILE_URL: "서명파일URL",
   FILE_ID: "서명파일ID",
-  SAVE_STATUS: "저장상태",
+  STATUS: "저장상태",
   NOTE: "비고"
 };
 
-const CERTIFICATE_COLUMNS = {
-  CERTIFICATE_ID: "제출ID",
+const CERTIFICATE = {
+  ID: "제출ID",
   TRAINING_ID: "교육ID",
   TRAINING_TITLE: "교육명",
   STAFF_ID: "교직원ID",
@@ -116,14 +121,13 @@ const CERTIFICATE_COLUMNS = {
   ISSUER: "이수기관",
   CERTIFICATE_NUMBER: "이수증번호",
   FILE_URL: "파일URL",
-  FILE_ID: "이수증파일ID",
-  SUBMIT_STATUS: "제출상태",
-  APPROVAL_STATUS: "승인상태",
+  FILE_ID: "파일ID",
+  STATUS: "상태",
   REVIEWER: "확인자",
   NOTE: "비고"
 };
 
-const FINAL_SHEET_COLUMNS = {
+const FINAL = {
   SEQUENCE: "순번",
   TRAINING_ID: "교육ID",
   TRAINING_TITLE: "교육명",
@@ -139,2861 +143,1412 @@ const FINAL_SHEET_COLUMNS = {
 };
 
 const ACTIONS = {
-  GET_SCHOOL_CONFIG: "getSchoolConfig",
-  GET_TRAINING_LIST: "getTrainingList",
-  GET_TRAINING_DETAIL: "getTrainingDetail",
-  CREATE_TRAINING: "createTraining",
-  UPDATE_TRAINING: "updateTraining",
-  UPDATE_TRAINING_STATUS: "updateTrainingStatus",
-  GET_STAFF_DETAIL: "getStaffDetail",
-  GET_STAFF_BY_NAME_DEPT: "getStaffByNameDept",
-  GET_STAFF_LIST: "getStaffList",
-  CREATE_STAFF: "createStaff",
-  UPDATE_STAFF: "updateStaff",
-  DEACTIVATE_STAFF: "deactivateStaff",
-  VERIFY_ADMIN_CODE: "verifyAdminCode",
-  VERIFY_STAFF: "verifyStaff",
-  CHECK_TRAINING_TARGET: "checkTrainingTarget",
-  CHECK_DUPLICATE_ATTENDANCE: "checkDuplicateAttendance",
-  SAVE_QR_ATTENDANCE: "saveQrAttendance",
-  SAVE_SIGNATURE: "saveSignature",
-  SAVE_BULK_SIGNATURE: "saveBulkSignature",
-  CHECK_SIGNATURE_EXISTS: "checkSignatureExists",
-  GET_SIGNATURE_REQUIRED_TRAININGS: "getSignatureRequiredTrainings",
-  GET_MY_TRAINING_STATUS: "getMyTrainingStatus",
-  GET_MY_TRAINING_STATUS_BY_NAME_DEPT: "getMyTrainingStatusByNameDept",
-  GET_CERTIFICATE_REQUIRED_TRAININGS: "getCertificateRequiredTrainings",
-  SAVE_CERTIFICATE_SUBMISSION: "saveCertificateSubmission",
-  GET_TRAINING_ATTENDANCE_STATUS: "getTrainingAttendanceStatus",
-  GET_FINAL_ATTENDANCE_PREVIEW: "getFinalAttendancePreview",
-  GENERATE_FINAL_ATTENDANCE_SHEET: "generateFinalAttendanceSheet",
-  VALIDATE_SETUP: "validateSetup",
-  UPDATE_SCHOOL_CONFIG: "updateSchoolConfig",
-  GET_ADMIN_DASHBOARD_DATA: "getAdminDashboardData"
+  getSchoolConfig: getSchoolConfig,
+  verifyAdminCode: verifyAdminCode,
+  updateSchoolConfig: updateSchoolConfig,
+  validateSetup: validateSetup,
+  getTrainingList: getTrainingList,
+  getTrainingDetail: getTrainingDetail,
+  createTraining: createTraining,
+  updateTraining: updateTraining,
+  updateTrainingStatus: updateTrainingStatus,
+  getStaffByNameDept: getStaffByNameDept,
+  getStaffDetail: getStaffDetail,
+  getStaffList: getStaffList,
+  createStaff: createStaff,
+  updateStaff: updateStaff,
+  deactivateStaff: deactivateStaff,
+  verifyStaff: verifyStaff,
+  getTrainingTargets: getTrainingTargets,
+  checkTrainingTarget: checkTrainingTarget,
+  checkDuplicateAttendance: checkDuplicateAttendance,
+  saveQrAttendance: saveQrAttendance,
+  getSignatureRequiredTrainings: getSignatureRequiredTrainings,
+  checkSignatureExists: checkSignatureExists,
+  saveSignature: saveSignature,
+  saveBulkSignature: saveBulkSignature,
+  getCertificateRequiredTrainings: getCertificateRequiredTrainings,
+  saveCertificateSubmission: saveCertificateSubmission,
+  getMyTrainingStatus: getMyTrainingStatus,
+  getMyTrainingStatusByNameDept: getMyTrainingStatusByNameDept,
+  getTrainingAttendanceStatus: getTrainingAttendanceStatus,
+  getFinalAttendancePreview: getFinalAttendancePreview,
+  generateFinalAttendanceSheet: generateFinalAttendanceSheet,
+  getNotices: getNotices,
+  getDepartments: getDepartments,
+  getCodeValues: getCodeValues,
+  getAdminDashboardData: getAdminDashboardData
 };
 
-/**
- * GET health check.
- *
- * Input: optional query parameter action
- * Output: JSON response with service status or requested read-only data.
- * TODO: Limit GET to health/config only if deployment policy requires stricter behavior.
- */
 function doGet(e) {
-  try {
-    const action = e && e.parameter ? e.parameter.action : "";
-
-    if (action === ACTIONS.GET_SCHOOL_CONFIG) {
-      return getSchoolConfig();
-    }
-
-    if (action === ACTIONS.GET_TRAINING_LIST) {
-      return getTrainingList(e.parameter);
-    }
-
-    if (action === ACTIONS.GET_TRAINING_DETAIL) {
-      return getTrainingDetail(e.parameter);
-    }
-
-    if (action === ACTIONS.GET_STAFF_DETAIL) {
-      return getStaffDetail(e.parameter);
-    }
-
-    if (action === ACTIONS.CHECK_SIGNATURE_EXISTS) {
-      return checkSignatureExists(e.parameter);
-    }
-
-    if (action === ACTIONS.GET_TRAINING_ATTENDANCE_STATUS) {
-      return getTrainingAttendanceStatus(e.parameter);
-    }
-
-    if (action === ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW) {
-      return getFinalAttendancePreview(e.parameter);
-    }
-
-    if (action === ACTIONS.VALIDATE_SETUP) {
-      return validateSetup();
-    }
-
-    return successResponse({
-      service: "School Staff Training Center Apps Script",
-      message: "Apps Script endpoint is ready."
-    });
-  } catch (error) {
-    return errorResponse(errorMessage_(error), errorCode_(error), {
-      detail: error && error.message ? error.message : String(error)
-    });
-  }
+  return route_(e && e.parameter ? e.parameter : {});
 }
 
-/**
- * POST action dispatcher.
- *
- * Input: JSON body with { action: string, ...payload }
- * Output: JSON response from the selected action.
- * TODO: Add deployment-specific origin checks if needed.
- */
 function doPost(e) {
+  var payload = {};
   try {
-    const payload = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
-    const action = payload.action;
-
-    switch (action) {
-      case ACTIONS.GET_SCHOOL_CONFIG:
-        return getSchoolConfig();
-      case ACTIONS.GET_TRAINING_LIST:
-        return getTrainingList(payload);
-      case ACTIONS.GET_TRAINING_DETAIL:
-        return getTrainingDetail(payload);
-      case ACTIONS.CREATE_TRAINING:
-        return createTraining(payload);
-      case ACTIONS.UPDATE_TRAINING:
-        return updateTraining(payload);
-      case ACTIONS.UPDATE_TRAINING_STATUS:
-        return updateTrainingStatus(payload);
-      case ACTIONS.GET_STAFF_DETAIL:
-        return getStaffDetail(payload);
-      case ACTIONS.GET_STAFF_BY_NAME_DEPT:
-        return getStaffByNameDept(payload);
-      case ACTIONS.GET_STAFF_LIST:
-        return getStaffList();
-      case ACTIONS.CREATE_STAFF:
-        return createStaff(payload);
-      case ACTIONS.UPDATE_STAFF:
-        return updateStaff(payload);
-      case ACTIONS.DEACTIVATE_STAFF:
-        return deactivateStaff(payload);
-      case ACTIONS.VERIFY_ADMIN_CODE:
-        return verifyAdminCode(payload);
-      case ACTIONS.VERIFY_STAFF:
-        return verifyStaff(payload);
-      case ACTIONS.CHECK_TRAINING_TARGET:
-        return checkTrainingTarget(payload);
-      case ACTIONS.CHECK_DUPLICATE_ATTENDANCE:
-        return checkDuplicateAttendance(payload);
-      case ACTIONS.SAVE_QR_ATTENDANCE:
-        return saveQrAttendance(payload);
-      case ACTIONS.SAVE_SIGNATURE:
-        return saveSignature(payload);
-      case ACTIONS.SAVE_BULK_SIGNATURE:
-        return saveBulkSignature(payload);
-      case ACTIONS.CHECK_SIGNATURE_EXISTS:
-        return checkSignatureExists(payload);
-      case ACTIONS.GET_SIGNATURE_REQUIRED_TRAININGS:
-        return getSignatureRequiredTrainings(payload);
-      case ACTIONS.GET_MY_TRAINING_STATUS:
-        return getMyTrainingStatus(payload);
-      case ACTIONS.GET_MY_TRAINING_STATUS_BY_NAME_DEPT:
-        return getMyTrainingStatusByNameDept(payload);
-      case ACTIONS.GET_CERTIFICATE_REQUIRED_TRAININGS:
-        return getCertificateRequiredTrainings(payload);
-      case ACTIONS.SAVE_CERTIFICATE_SUBMISSION:
-        return saveCertificateSubmission(payload);
-      case ACTIONS.GET_TRAINING_ATTENDANCE_STATUS:
-        return getTrainingAttendanceStatus(payload);
-      case ACTIONS.GET_FINAL_ATTENDANCE_PREVIEW:
-        return getFinalAttendancePreview(payload);
-      case ACTIONS.GENERATE_FINAL_ATTENDANCE_SHEET:
-        return generateFinalAttendanceSheet(payload);
-      case ACTIONS.VALIDATE_SETUP:
-        return validateSetup();
-      case ACTIONS.UPDATE_SCHOOL_CONFIG:
-        return updateSchoolConfig(payload);
-      case ACTIONS.GET_ADMIN_DASHBOARD_DATA:
-        return getAdminDashboardData();
-      default:
-        return errorResponse("지원하지 않는 action입니다.", "UNKNOWN_ACTION");
-    }
+    payload = e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
   } catch (error) {
-    return errorResponse(errorMessage_(error), errorCode_(error), {
-      detail: error && error.message ? error.message : String(error)
-    });
+    return errorResponse("요청 형식을 확인해 주세요.", "INVALID_JSON");
   }
+  return route_(payload);
 }
 
-/**
- * Read school configuration from 00_학교설정.
- *
- * Input: none
- * Output: minimum school display settings for the UI.
- * TODO: Decide whether manager contact should be returned to all users or admin only.
- */
-function getSchoolConfig() {
-  return jsonResponse(getPublicSchoolConfig_());
-}
-
-function getPublicSchoolConfig_() {
-  const config = getConfigMap_();
-
-  return {
-    schoolName: config[CONFIG_KEYS.SCHOOL_NAME] || "",
-    centerName: config[CONFIG_KEYS.CENTER_NAME] || "학교 교직원 교육센터",
-    logoUrl: config[CONFIG_KEYS.SCHOOL_LOGO_URL] || "",
-    schoolLogoUrl: config[CONFIG_KEYS.SCHOOL_LOGO_URL] || "",
-    primaryColor: config[CONFIG_KEYS.PRIMARY_COLOR] || "#1F2A44",
-    secondaryColor: config[CONFIG_KEYS.SECONDARY_COLOR] || "#EEF4FF",
-    ownerDepartment: config[CONFIG_KEYS.DEPARTMENT_NAME] || "",
-    ownerName: config[CONFIG_KEYS.MANAGER_NAME] || "",
-    ownerContact: config[CONFIG_KEYS.MANAGER_CONTACT] || "",
-    departmentName: config[CONFIG_KEYS.DEPARTMENT_NAME] || "",
-    managerName: config[CONFIG_KEYS.MANAGER_NAME] || "",
-    managerContact: config[CONFIG_KEYS.MANAGER_CONTACT] || "",
-    signatureFolderId: config[CONFIG_KEYS.SIGNATURE_FOLDER_ID] || config.signatureFolderId || "",
-    certificateFolderId: config[CONFIG_KEYS.CERTIFICATE_FOLDER_ID] || config.certificateFolderId || "",
-    finalRosterFolderId: config[CONFIG_KEYS.FINAL_ROSTER_FOLDER_ID] || config.finalRosterFolderId || "",
-    activeSemester: config[CONFIG_KEYS.ACTIVE_SEMESTER] || config.activeSemester || "",
-    privacyNotice: config[CONFIG_KEYS.PRIVACY_NOTICE] || ""
-  };
-}
-
-function createTraining(payload) {
-  const input = payload && payload.training ? payload.training : payload || {};
-  const title = String(input.title || "").trim();
-
-  if (!title) {
-    return errorResponse("교육명을 입력해 주세요.", "MISSING_TRAINING_TITLE");
-  }
-
-  const row = {};
-  row[TRAINING_COLUMNS.TRAINING_ID] = generateTrainingId_();
-  row[TRAINING_COLUMNS.TITLE] = title;
-  row[TRAINING_COLUMNS.DATE] = String(input.date || "").trim();
-  row[TRAINING_COLUMNS.TIME] = String(input.time || "").trim();
-  row[TRAINING_COLUMNS.LOCATION] = String(input.place || input.location || "").trim();
-  row[TRAINING_COLUMNS.DEPARTMENT] = String(input.department || "").trim();
-  row[TRAINING_COLUMNS.CATEGORY] = String(input.category || "").trim();
-  row[TRAINING_COLUMNS.QR_ENABLED] = toYn_(input.qrEnabled);
-  row[TRAINING_COLUMNS.SIGNATURE_REQUIRED] = toYn_(input.signatureRequired);
-  row[TRAINING_COLUMNS.CERTIFICATE_REQUIRED] = toYn_(input.certificateRequired);
-  row[TRAINING_COLUMNS.ACTIVE_STATUS] = String(input.status || input.activeStatus || "").trim() || "활성";
-  row[TRAINING_COLUMNS.NOTE] = String(input.note || "").trim();
-
-  appendRow(SHEET_NAMES.TRAININGS, row);
-  return jsonResponse(normalizeTrainingRow_(row));
-}
-
-function updateTraining(payload) {
-  const trainingId = String(payload && payload.trainingId || "").trim();
-  const input = payload && payload.training ? payload.training : {};
-
-  if (!trainingId) {
-    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
-  }
-
-  const updates = {};
-  [
-    ["title", TRAINING_COLUMNS.TITLE],
-    ["date", TRAINING_COLUMNS.DATE],
-    ["time", TRAINING_COLUMNS.TIME],
-    ["department", TRAINING_COLUMNS.DEPARTMENT],
-    ["category", TRAINING_COLUMNS.CATEGORY],
-    ["note", TRAINING_COLUMNS.NOTE]
-  ].forEach(function (pair) {
-    if (input[pair[0]] !== undefined) {
-      updates[pair[1]] = String(input[pair[0]] || "").trim();
-    }
-  });
-
-  if (input.place !== undefined || input.location !== undefined) {
-    updates[TRAINING_COLUMNS.LOCATION] = String(input.place || input.location || "").trim();
-  }
-
-  if (input.qrEnabled !== undefined) {
-    updates[TRAINING_COLUMNS.QR_ENABLED] = toYn_(input.qrEnabled);
-  }
-
-  if (input.signatureRequired !== undefined) {
-    updates[TRAINING_COLUMNS.SIGNATURE_REQUIRED] = toYn_(input.signatureRequired);
-  }
-
-  if (input.certificateRequired !== undefined) {
-    updates[TRAINING_COLUMNS.CERTIFICATE_REQUIRED] = toYn_(input.certificateRequired);
-  }
-
-  if (input.status !== undefined || input.activeStatus !== undefined) {
-    updates[TRAINING_COLUMNS.ACTIVE_STATUS] = String(input.status || input.activeStatus || "").trim();
-  }
-
-  const updated = updateTrainingRow_(trainingId, updates);
-  if (!updated) {
-    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
-  }
-
-  return jsonResponse(updated);
-}
-
-function updateTrainingStatus(payload) {
-  const trainingId = String(payload && payload.trainingId || "").trim();
-  const status = String(payload && payload.status || "").trim();
-
-  if (!trainingId) {
-    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
-  }
-
-  if (!status) {
-    return errorResponse("변경할 활성상태를 입력해 주세요.", "MISSING_TRAINING_STATUS");
-  }
-
-  const updated = updateTrainingRow_(trainingId, {
-    [TRAINING_COLUMNS.ACTIVE_STATUS]: status
-  });
-
-  if (!updated) {
-    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
-  }
-
-  return jsonResponse(updated);
-}
-
-/**
- * Verify admin code without returning the configured code.
- *
- * Input: { adminCode: string }
- * Output: { verified: boolean }
- */
-function verifyAdminCode(payload) {
-  const inputCode = String(payload && payload.adminCode || "").trim();
-  const config = getConfigMap_();
-  const savedCode = String(getConfigValue_(config, ["adminCode", CONFIG_KEYS.ADMIN_CODE, "관리자 코드"]) || "").trim();
-
-  if (!savedCode) {
-    return errorResponse("관리자 코드가 설정되어 있지 않습니다.", "ADMIN_CODE_NOT_SET");
-  }
-
-  if (!inputCode || inputCode !== savedCode) {
-    return errorResponse("관리자 코드가 일치하지 않습니다.", "ADMIN_CODE_MISMATCH");
-  }
-
-  return jsonResponse({
-    verified: true
-  });
-}
-
-/**
- * Update allowed school configuration keys in 00_학교설정.
- *
- * Input: payload with editable setting fields
- * Output: updated school configuration
- */
-function updateSchoolConfig(payload) {
-  const updates = payload && payload.settings ? payload.settings : payload || {};
-  const keyMap = {
-    schoolName: CONFIG_KEYS.SCHOOL_NAME,
-    centerName: CONFIG_KEYS.CENTER_NAME,
-    logoUrl: CONFIG_KEYS.SCHOOL_LOGO_URL,
-    schoolLogoUrl: CONFIG_KEYS.SCHOOL_LOGO_URL,
-    primaryColor: CONFIG_KEYS.PRIMARY_COLOR,
-    secondaryColor: CONFIG_KEYS.SECONDARY_COLOR,
-    ownerDepartment: CONFIG_KEYS.DEPARTMENT_NAME,
-    departmentName: CONFIG_KEYS.DEPARTMENT_NAME,
-    ownerName: CONFIG_KEYS.MANAGER_NAME,
-    managerName: CONFIG_KEYS.MANAGER_NAME,
-    ownerContact: CONFIG_KEYS.MANAGER_CONTACT,
-    managerContact: CONFIG_KEYS.MANAGER_CONTACT,
-    signatureFolderId: CONFIG_KEYS.SIGNATURE_FOLDER_ID,
-    certificateFolderId: CONFIG_KEYS.CERTIFICATE_FOLDER_ID,
-    finalRosterFolderId: CONFIG_KEYS.FINAL_ROSTER_FOLDER_ID,
-    privacyNotice: CONFIG_KEYS.PRIVACY_NOTICE,
-    adminCode: CONFIG_KEYS.ADMIN_CODE,
-    activeSemester: CONFIG_KEYS.ACTIVE_SEMESTER
-  };
-  const rowsToWrite = [];
-
-  Object.keys(keyMap).forEach(function (field) {
-    if (updates[field] !== undefined) {
-      rowsToWrite.push({
-        key: keyMap[field],
-        value: String(updates[field] || "").trim()
+function route_(payload) {
+  try {
+    var action = payload && payload.action ? String(payload.action) : "";
+    if (!action) {
+      return successResponse({
+        service: "School Health Hub Apps Script",
+        version: "hub-v1.1",
+        status: "ready"
       });
     }
+    if (!ACTIONS[action]) {
+      return errorResponse("지원하지 않는 요청입니다.", "UNKNOWN_ACTION");
+    }
+    return ACTIONS[action](payload || {});
+  } catch (error) {
+    return errorResponse(error && error.userMessage ? error.userMessage : "처리 중 오류가 발생했습니다.", error && error.code ? error.code : "SERVER_ERROR");
+  }
+}
+
+function getSchoolConfig() {
+  var config = getConfigMap_();
+  return successResponse(publicSchoolConfig_(config));
+}
+
+function verifyAdminCode(payload) {
+  var config = getConfigMap_();
+  var input = String(payload.adminCode || "").trim();
+  var saved = String(configValue_(config, ["adminCode", "관리자코드", "관리자 코드"]) || "").trim();
+  if (!saved) {
+    return errorResponse("관리자 코드가 설정되지 않았습니다.", "ADMIN_CODE_NOT_SET");
+  }
+  if (!input || input !== saved) {
+    return errorResponse("관리자 코드가 일치하지 않습니다.", "ADMIN_CODE_MISMATCH");
+  }
+  return successResponse({ verified: true });
+}
+
+function updateSchoolConfig(payload) {
+  var settings = payload.settings || payload || {};
+  var keyMap = {
+    schoolName: CONFIG.SCHOOL_NAME,
+    centerName: CONFIG.CENTER_NAME,
+    logoUrl: CONFIG.LOGO_URL,
+    schoolLogoUrl: CONFIG.LOGO_URL,
+    primaryColor: CONFIG.PRIMARY_COLOR,
+    secondaryColor: CONFIG.SECONDARY_COLOR,
+    ownerDepartment: CONFIG.OWNER_DEPARTMENT,
+    ownerName: CONFIG.OWNER_NAME,
+    ownerContact: CONFIG.OWNER_CONTACT,
+    signatureFolderId: CONFIG.SIGNATURE_FOLDER_ID,
+    certificateFolderId: CONFIG.CERTIFICATE_FOLDER_ID,
+    finalRosterFolderId: CONFIG.FINAL_ROSTER_FOLDER_ID,
+    privacyNotice: CONFIG.PRIVACY_NOTICE,
+    activeSemester: CONFIG.ACTIVE_SEMESTER,
+    adminCode: CONFIG.ADMIN_CODE
+  };
+  var rows = Object.keys(keyMap).filter(function (key) {
+    return settings[key] !== undefined && (key !== "adminCode" || String(settings[key] || "").trim());
+  }).map(function (key) {
+    return { key: keyMap[key], value: String(settings[key] || "").trim() };
   });
 
-  if (!rowsToWrite.length) {
+  if (!rows.length) {
     return errorResponse("저장할 설정값이 없습니다.", "NO_CONFIG_UPDATES");
   }
 
-  const sheet = getSheetByName(SHEET_NAMES.CONFIG);
-  const values = sheet.getDataRange().getValues();
-  const headerRowIndex = findHeaderRowIndex_(values, getRequiredHeadersForSheet_(SHEET_NAMES.CONFIG));
-  const headers = values[headerRowIndex] || [];
-  const keyColumnIndex = findFirstHeaderIndex_(headers, ["설정키", "항목", "key", "Key"]);
-  const valueColumnIndex = findFirstHeaderIndex_(headers, ["설정값", "값", "value", "Value"]);
-
-  if (keyColumnIndex === -1 || valueColumnIndex === -1) {
-    return errorResponse("00_학교설정 탭의 설정키/설정값 헤더를 확인해주세요.", "CONFIG_HEADERS_NOT_FOUND");
-  }
-
-  const rowIndexByKey = {};
-  for (let rowIndex = headerRowIndex + 1; rowIndex < values.length; rowIndex += 1) {
-    const key = String(values[rowIndex][keyColumnIndex] || "").trim();
-    if (key) {
-      rowIndexByKey[key] = rowIndex + 1;
-    }
-  }
-
-  rowsToWrite.forEach(function (item) {
-    if (rowIndexByKey[item.key]) {
-      sheet.getRange(rowIndexByKey[item.key], valueColumnIndex + 1).setValue(item.value);
-      return;
-    }
-
-    const newRow = headers.map(function (header, index) {
-      if (index === keyColumnIndex) {
-        return item.key;
-      }
-
-      if (index === valueColumnIndex) {
-        return item.value;
-      }
-
-      return "";
-    });
-    sheet.appendRow(newRow);
-  });
-
+  upsertConfigRows_(rows);
   return getSchoolConfig();
 }
 
-/**
- * Validate installation prerequisites without exposing staff data.
- *
- * Input: none
- * Output: folder config status, required sheet status, and active training count.
- */
 function validateSetup() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const config = getConfigMap_();
-  const requiredSheets = [
-    { key: "schoolConfig", label: "학교설정", name: SHEET_NAMES.CONFIG },
-    { key: "trainings", label: "교육목록", name: SHEET_NAMES.TRAININGS },
-    { key: "staff", label: "교직원명단", name: SHEET_NAMES.STAFF },
-    { key: "targets", label: "교육대상", name: SHEET_NAMES.TARGETS },
-    { key: "attendance", label: "QR출석기록", name: SHEET_NAMES.ATTENDANCE },
-    { key: "signatures", label: "전자서명기록", name: SHEET_NAMES.SIGNATURES },
-    { key: "finalRoster", label: "최종서명부", name: SHEET_NAMES.FINAL_ROSTER }
-  ];
-  const sheets = requiredSheets.map(function (sheet) {
-    return {
-      key: sheet.key,
-      label: sheet.label,
-      name: sheet.name,
-      exists: Boolean(spreadsheet.getSheetByName(sheet.name))
-    };
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var config = getConfigMap_();
+  var sheetChecks = [
+    [SHEETS.CONFIG, "학교설정"],
+    [SHEETS.TRAININGS, "교육목록"],
+    [SHEETS.STAFF, "교직원명단"],
+    [SHEETS.TARGETS, "교육대상"],
+    [SHEETS.ATTENDANCE, "QR출석기록"],
+    [SHEETS.SIGNATURES, "전자서명기록"],
+    [SHEETS.FINAL_ROSTER, "최종서명부"]
+  ].map(function (item) {
+    return { key: item[0], label: item[1], name: item[0], exists: Boolean(spreadsheet.getSheetByName(item[0])) };
   });
-  const folders = [
-    {
-      key: "signatureFolderId",
-      label: "전자서명 저장 폴더",
-      value: getConfigValue_(config, ["signatureFolderId", CONFIG_KEYS.SIGNATURE_FOLDER_ID, "전자서명저장폴더ID"])
-    },
-    {
-      key: "finalRosterFolderId",
-      label: "최종 서명부 저장 폴더",
-      value: getConfigValue_(config, ["finalRosterFolderId", CONFIG_KEYS.FINAL_ROSTER_FOLDER_ID, "최종서명부저장폴더ID"])
-    },
-    {
-      key: "certificateFolderId",
-      label: "이수증 저장 폴더",
-      value: getConfigValue_(config, ["certificateFolderId", CONFIG_KEYS.CERTIFICATE_FOLDER_ID, "이수증저장폴더ID"])
-    }
-  ].map(function (folder) {
-    return {
-      key: folder.key,
-      label: folder.label,
-      configured: Boolean(String(folder.value || "").trim())
-    };
+  var folderChecks = [
+    ["signatureFolderId", "전자서명 저장 폴더", config.signatureFolderId],
+    ["finalRosterFolderId", "최종 서명부 저장 폴더", config.finalRosterFolderId],
+    ["certificateFolderId", "이수증 저장 폴더", config.certificateFolderId]
+  ].map(function (item) {
+    return { key: item[0], label: item[1], configured: Boolean(String(item[2] || "").trim()) };
   });
-  const trainings = sheets.some(function (sheet) {
-    return sheet.name === SHEET_NAMES.TRAININGS && sheet.exists;
-  }) ? readRows(SHEET_NAMES.TRAININGS) : [];
-  const activeTrainingCount = trainings.filter(function (row) {
-    return isActiveTrainingStatus(row[TRAINING_COLUMNS.ACTIVE_STATUS]);
-  }).length;
-
-  return jsonResponse({
-    schoolConfig: {
-      schoolName: config[CONFIG_KEYS.SCHOOL_NAME] || "",
-      centerName: config[CONFIG_KEYS.CENTER_NAME] || "학교 교직원 교육센터"
-    },
-    folders: folders,
-    sheets: sheets,
-    training: {
-      totalCount: trainings.length,
-      activeCount: activeTrainingCount
-    },
-    ok: folders.every(function (folder) { return folder.configured; }) &&
-      sheets.every(function (sheet) { return sheet.exists; }) &&
-      activeTrainingCount > 0
+  var trainings = spreadsheet.getSheetByName(SHEETS.TRAININGS) ? readTable(SHEETS.TRAININGS, [TRAINING.ID, TRAINING.TITLE, TRAINING.STATUS]) : [];
+  var activeCount = trainings.filter(function (row) { return isActiveTraining_(row); }).length;
+  return successResponse({
+    ok: sheetChecks.every(function (item) { return item.exists; }) && activeCount > 0,
+    schoolConfig: publicSchoolConfig_(config),
+    folders: folderChecks,
+    sheets: sheetChecks,
+    training: { totalCount: trainings.length, activeCount: activeCount }
   });
 }
 
-/**
- * Read training list from 01_교육목록.
- *
- * Input: { includeInactive?: boolean }
- * Output: list of training rows with minimum display fields.
- * TODO: Normalize TRUE/FALSE and active status values after real sheet samples are confirmed.
- */
 function getTrainingList(payload) {
-  const includeInactive = payload && isTruthy(payload.includeInactive);
-  const rows = readRows(SHEET_NAMES.TRAININGS);
-  const trainings = rows
-    .filter(function (row) {
-      return includeInactive || isActiveTrainingStatus(row[TRAINING_COLUMNS.ACTIVE_STATUS]);
-    })
-    .map(function (row) {
-      return normalizeTrainingRow_(row);
-    });
-
-  return jsonResponse(trainings);
+  var includeInactive = normalizeBoolean(payload.includeInactive);
+  var trainings = readTable(SHEETS.TRAININGS, [TRAINING.ID, TRAINING.TITLE, TRAINING.STATUS])
+    .filter(function (row) { return includeInactive || isActiveTraining_(row); })
+    .map(normalizeTraining_);
+  return successResponse(trainings);
 }
 
-/**
- * Read one training from 01_교육목록.
- *
- * Input: { trainingId: string }
- * Output: normalized training object.
- */
 function getTrainingDetail(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-
-  if (!trainingId) {
-    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
-  }
-
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var training = findTraining_(trainingId);
   if (!training) {
     return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
   }
-
-  return jsonResponse(normalizeTrainingRow_(training));
+  return successResponse(normalizeTraining_(training));
 }
 
-/**
- * Verify staff identity from 02_교직원명단.
- *
- * Input: { staffQuery: string, authCode: string }
- * Output: { staffId, name, department, position }
- * TODO: Add lockout/rate-limit strategy outside this skeleton if needed.
- */
-function verifyStaff(payload) {
-  const staffQuery = payload && payload.staffQuery ? String(payload.staffQuery).trim() : "";
-  const authCode = payload && payload.authCode ? String(payload.authCode).trim() : "";
-
-  if (!staffQuery || !authCode) {
-    return errorResponse("교직원 확인 정보가 필요합니다.", "MISSING_STAFF_AUTH");
-  }
-
-  const rows = readRows(SHEET_NAMES.STAFF);
-  const staff = rows.find(function (row) {
-    const staffId = String(row[STAFF_COLUMNS.STAFF_ID] || "").trim();
-    const name = String(row[STAFF_COLUMNS.NAME] || "").trim();
-    const code = String(row[STAFF_COLUMNS.AUTH_CODE] || "").trim();
-    return (staffId === staffQuery || name === staffQuery) && code === authCode;
-  });
-
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 확인할 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  return jsonResponse({
-    staff: {
-      staffId: staff[STAFF_COLUMNS.STAFF_ID] || "",
-      name: staff[STAFF_COLUMNS.NAME] || "",
-      department: staff[STAFF_COLUMNS.DEPARTMENT] || "",
-      position: staff[STAFF_COLUMNS.POSITION] || ""
-    }
-  });
+function createTraining(payload) {
+  var input = payload.training || payload || {};
+  var title = requireText_(input.title, "교육명을 입력해 주세요.", "MISSING_TRAINING_TITLE");
+  var row = {};
+  row[TRAINING.ID] = generateTrainingId_();
+  row[TRAINING.TITLE] = title;
+  row[TRAINING.DATE] = text_(input.date);
+  row[TRAINING.TIME] = text_(input.time);
+  row[TRAINING.PLACE] = text_(input.place || input.location);
+  row[TRAINING.DEPARTMENT] = text_(input.department);
+  row[TRAINING.CATEGORY] = text_(input.category);
+  row[TRAINING.QR_ENABLED] = yn_(input.qrEnabled);
+  row[TRAINING.SIGNATURE_REQUIRED] = yn_(input.signatureRequired);
+  row[TRAINING.CERTIFICATE_REQUIRED] = yn_(input.certificateRequired);
+  row[TRAINING.STATUS] = text_(input.status || input.activeStatus) || "활성";
+  row[TRAINING.FOLDER_MODE] = text_(input.folderMode);
+  row[TRAINING.DRIVE_FOLDER_ID] = text_(input.driveFolderId);
+  row[TRAINING.SIGNATURE_FOLDER_ID] = text_(input.signatureFolderId);
+  row[TRAINING.CERTIFICATE_FOLDER_ID] = text_(input.certificateFolderId);
+  row[TRAINING.FINAL_ROSTER_FOLDER_ID] = text_(input.finalRosterFolderId);
+  row[TRAINING.NOTE] = text_(input.note);
+  appendRowByHeader(SHEETS.TRAININGS, row);
+  return successResponse(normalizeTraining_(row));
 }
 
-/**
- * Read one staff member from 02_교직원명단.
- *
- * Input: { staffId: string }
- * Output: { staffId, name, department, position }
- */
-function getStaffDetail(payload) {
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-
-  if (!staffId) {
-    return errorResponse("교직원ID가 필요합니다.", "MISSING_STAFF_ID");
-  }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  return jsonResponse(normalizeStaffRow_(staff));
+function updateTraining(payload) {
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var input = payload.training || {};
+  var updates = {};
+  copyIfDefined_(updates, input, "title", TRAINING.TITLE);
+  copyIfDefined_(updates, input, "date", TRAINING.DATE);
+  copyIfDefined_(updates, input, "time", TRAINING.TIME);
+  copyIfDefined_(updates, input, "department", TRAINING.DEPARTMENT);
+  copyIfDefined_(updates, input, "category", TRAINING.CATEGORY);
+  copyIfDefined_(updates, input, "folderMode", TRAINING.FOLDER_MODE);
+  copyIfDefined_(updates, input, "driveFolderId", TRAINING.DRIVE_FOLDER_ID);
+  copyIfDefined_(updates, input, "signatureFolderId", TRAINING.SIGNATURE_FOLDER_ID);
+  copyIfDefined_(updates, input, "certificateFolderId", TRAINING.CERTIFICATE_FOLDER_ID);
+  copyIfDefined_(updates, input, "finalRosterFolderId", TRAINING.FINAL_ROSTER_FOLDER_ID);
+  copyIfDefined_(updates, input, "note", TRAINING.NOTE);
+  if (input.place !== undefined || input.location !== undefined) updates[TRAINING.PLACE] = text_(input.place || input.location);
+  if (input.qrEnabled !== undefined) updates[TRAINING.QR_ENABLED] = yn_(input.qrEnabled);
+  if (input.signatureRequired !== undefined) updates[TRAINING.SIGNATURE_REQUIRED] = yn_(input.signatureRequired);
+  if (input.certificateRequired !== undefined) updates[TRAINING.CERTIFICATE_REQUIRED] = yn_(input.certificateRequired);
+  if (input.status !== undefined || input.activeStatus !== undefined) updates[TRAINING.STATUS] = text_(input.status || input.activeStatus);
+  var updated = updateRowByKey_(SHEETS.TRAININGS, TRAINING.ID, trainingId, updates, normalizeTraining_);
+  if (!updated) return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  return successResponse(updated);
 }
 
-/**
- * Read one active staff member by name and optional department.
- *
- * Input: { name: string, department?: string }
- * Output: { staffId, name, department, position }
- */
+function updateTrainingStatus(payload) {
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var status = requireText_(payload.status, "변경할 활성상태가 필요합니다.", "MISSING_TRAINING_STATUS");
+  var updated = updateRowByKey_(SHEETS.TRAININGS, TRAINING.ID, trainingId, map_(TRAINING.STATUS, status), normalizeTraining_);
+  if (!updated) return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  return successResponse(updated);
+}
+
 function getStaffByNameDept(payload) {
-  const name = payload && payload.name ? String(payload.name).trim() : "";
-  const department = payload && payload.department ? String(payload.department).trim() : "";
-  const staffResult = findActiveStaffByNameDept_(name, department);
-
-  if (!staffResult.ok) {
-    return staffResult.response;
-  }
-
-  return jsonResponse({
-    staff: normalizeStaffRow_(staffResult.staff)
-  });
+  var staff = findStaffByNameDept_(payload.name, payload.department);
+  if (!staff.ok) return staff.response;
+  return successResponse({ staff: publicStaff_(staff.row) });
 }
 
-/**
- * Read staff list for admin management.
- *
- * Input: none
- * Output: { summary, staff }
- */
-function getStaffList() {
-  const staff = readRows(SHEET_NAMES.STAFF).map(normalizeStaffAdminRow_);
-  const summary = {
-    total: staff.length,
-    active: staff.filter(function (item) {
-      return isActiveStaffStatus_(item.employmentStatus);
-    }).length,
-    inactive: staff.filter(function (item) {
-      return !isActiveStaffStatus_(item.employmentStatus);
-    }).length,
-    managers: staff.filter(function (item) {
-      return isManagerRole_(item.role);
-    }).length
-  };
+function verifyStaff(payload) {
+  return getStaffByNameDept({ name: payload.name || payload.staffQuery, department: payload.department });
+}
 
-  return jsonResponse({
-    summary: summary,
+function getStaffDetail(payload) {
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var staff = findByColumn_(SHEETS.STAFF, STAFF.ID, staffId);
+  if (!staff || !isActiveStaff_(staff)) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  return successResponse(publicStaff_(staff));
+}
+
+function getStaffList() {
+  var staff = readTable(SHEETS.STAFF, [STAFF.ID, STAFF.NAME]).map(function (row) {
+    return {
+      staffId: text_(row[STAFF.ID]),
+      name: text_(row[STAFF.NAME]),
+      department: text_(row[STAFF.DEPARTMENT]),
+      position: text_(row[STAFF.POSITION]),
+      authCode: "",
+      employmentStatus: text_(row[STAFF.STATUS]) || "재직",
+      role: text_(row[STAFF.ROLE]) || "교직원",
+      note: text_(row[STAFF.NOTE])
+    };
+  });
+  return successResponse({
+    summary: {
+      total: staff.length,
+      active: staff.filter(function (item) { return isActiveStatus_(item.employmentStatus); }).length,
+      inactive: staff.filter(function (item) { return !isActiveStatus_(item.employmentStatus); }).length,
+      managers: staff.filter(function (item) { return item.role === "관리자" || item.role === "담당자"; }).length
+    },
     staff: staff
   });
 }
 
-/**
- * Create one staff member in 02_교직원명단.
- *
- * Input: { staff: { name, department, position, authCode, employmentStatus, role, note } }
- * Output: created staff item
- */
 function createStaff(payload) {
-  const input = payload && payload.staff ? payload.staff : payload || {};
-  const name = String(input.name || "").trim();
-
-  if (!name) {
-    return errorResponse("성명을 입력해주세요.", "MISSING_STAFF_NAME");
-  }
-
-  const row = {};
-  row[STAFF_COLUMNS.STAFF_ID] = createId_("STF");
-  row[STAFF_COLUMNS.NAME] = name;
-  row[STAFF_COLUMNS.DEPARTMENT] = String(input.department || "").trim();
-  row[STAFF_COLUMNS.POSITION] = String(input.position || "").trim();
-  row[STAFF_COLUMNS.AUTH_CODE] = String(input.authCode || "").trim() || createAuthCode_();
-  row[STAFF_COLUMNS.EMPLOYMENT_STATUS] = String(input.employmentStatus || "").trim() || "재직";
-  row[STAFF_COLUMNS.ROLE] = String(input.role || "").trim() || "교직원";
-  row[STAFF_COLUMNS.NOTE] = String(input.note || "").trim();
-
-  appendRow(SHEET_NAMES.STAFF, row);
-  return jsonResponse(normalizeStaffAdminRow_(row));
+  var input = payload.staff || payload || {};
+  var name = requireText_(input.name, "성명을 입력해 주세요.", "MISSING_STAFF_NAME");
+  var row = {};
+  row[STAFF.ID] = generateStaffId_();
+  row[STAFF.NAME] = name;
+  row[STAFF.DEPARTMENT] = text_(input.department);
+  row[STAFF.POSITION] = text_(input.position);
+  row[STAFF.STATUS] = text_(input.employmentStatus) || "재직";
+  row[STAFF.ROLE] = text_(input.role) || "교직원";
+  row[STAFF.NOTE] = text_(input.note);
+  appendRowByHeader(SHEETS.STAFF, row);
+  return successResponse(adminStaff_(row));
 }
 
-/**
- * Update one staff member in 02_교직원명단.
- *
- * Input: { staffId, staff: editable fields }
- * Output: updated staff item
- */
 function updateStaff(payload) {
-  const staffId = String(payload && payload.staffId || "").trim();
-  const input = payload && payload.staff ? payload.staff : {};
-
-  if (!staffId) {
-    return errorResponse("교직원ID가 필요합니다.", "MISSING_STAFF_ID");
-  }
-
-  const updates = {};
-  [
-    ["name", STAFF_COLUMNS.NAME],
-    ["department", STAFF_COLUMNS.DEPARTMENT],
-    ["position", STAFF_COLUMNS.POSITION],
-    ["authCode", STAFF_COLUMNS.AUTH_CODE],
-    ["employmentStatus", STAFF_COLUMNS.EMPLOYMENT_STATUS],
-    ["role", STAFF_COLUMNS.ROLE],
-    ["note", STAFF_COLUMNS.NOTE]
-  ].forEach(function (pair) {
-    if (input[pair[0]] !== undefined) {
-      updates[pair[1]] = String(input[pair[0]] || "").trim();
-    }
-  });
-
-  const updated = updateStaffRow_(staffId, updates);
-  if (!updated) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  return jsonResponse(updated);
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var input = payload.staff || {};
+  var updates = {};
+  copyIfDefined_(updates, input, "name", STAFF.NAME);
+  copyIfDefined_(updates, input, "department", STAFF.DEPARTMENT);
+  copyIfDefined_(updates, input, "position", STAFF.POSITION);
+  copyIfDefined_(updates, input, "employmentStatus", STAFF.STATUS);
+  copyIfDefined_(updates, input, "role", STAFF.ROLE);
+  copyIfDefined_(updates, input, "note", STAFF.NOTE);
+  var updated = updateRowByKey_(SHEETS.STAFF, STAFF.ID, staffId, updates, adminStaff_);
+  if (!updated) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  return successResponse(updated);
 }
 
-/**
- * Mark one staff member as inactive.
- *
- * Input: { staffId }
- * Output: updated staff item
- */
 function deactivateStaff(payload) {
-  const staffId = String(payload && payload.staffId || "").trim();
-
-  if (!staffId) {
-    return errorResponse("교직원ID가 필요합니다.", "MISSING_STAFF_ID");
-  }
-
-  const updated = updateStaffRow_(staffId, {
-    [STAFF_COLUMNS.EMPLOYMENT_STATUS]: "비활성"
-  });
-
-  if (!updated) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  return jsonResponse(updated);
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var updated = updateRowByKey_(SHEETS.STAFF, STAFF.ID, staffId, map_(STAFF.STATUS, "비활성"), adminStaff_);
+  if (!updated) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  return successResponse(updated);
 }
 
-/**
- * Check target status from 03_교육대상.
- *
- * Input: { trainingId: string, staffId: string }
- * Output: { isTarget, signatureExcluded, required }
- * TODO: Confirm whether blank target rows should default to false or throw a setup warning.
- */
+function getTrainingTargets(payload) {
+  var trainingId = text_(payload.trainingId);
+  var staffId = text_(payload.staffId);
+  var rows = readTable(SHEETS.TARGETS, [TARGET.TRAINING_ID, TARGET.STAFF_ID]);
+  rows = rows.filter(function (row) {
+    return (!trainingId || text_(row[TARGET.TRAINING_ID]) === trainingId) &&
+      (!staffId || text_(row[TARGET.STAFF_ID]) === staffId) &&
+      isTargetRow_(row);
+  });
+  return successResponse(rows.map(function (row) {
+    return {
+      trainingId: text_(row[TARGET.TRAINING_ID]),
+      staffId: text_(row[TARGET.STAFF_ID]),
+      isTarget: true,
+      required: normalizeBoolean(row[TARGET.REQUIRED]),
+      signatureExcluded: normalizeBoolean(row[TARGET.SIGNATURE_EXCLUDED]),
+      note: text_(row[TARGET.NOTE])
+    };
+  }));
+}
+
 function checkTrainingTarget(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-
-  if (!trainingId || !staffId) {
-    return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_TARGET_KEYS");
-  }
-
-  const target = readRows(SHEET_NAMES.TARGETS).find(function (row) {
-    return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-      String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId;
-  });
-
-  if (!target) {
-    return jsonResponse({
-      isTarget: false,
-      signatureExcluded: false,
-      required: false
-    });
-  }
-
-  return jsonResponse({
-    isTarget: isTruthy(target[TARGET_COLUMNS.IS_TARGET]),
-    signatureExcluded: isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]),
-    required: isTruthy(target[TARGET_COLUMNS.REQUIRED])
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var target = findTarget_(trainingId, staffId);
+  return successResponse({
+    isTarget: Boolean(target),
+    required: target ? normalizeBoolean(target[TARGET.REQUIRED]) : false,
+    signatureExcluded: target ? normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED]) : false
   });
 }
 
-/**
- * Check duplicate QR attendance from 04_QR출석기록.
- *
- * Input: { trainingId: string, staffId: string }
- * Output: { duplicate, attendanceId, attendedAt, processStatus }
- */
 function checkDuplicateAttendance(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-
-  if (!trainingId || !staffId) {
-    return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_DUPLICATE_KEYS");
-  }
-
-  const existing = findAttendance_(trainingId, staffId);
-
-  if (!existing) {
-    return jsonResponse({
-      duplicate: false,
-      attendanceId: "",
-      attendedAt: "",
-      processStatus: ""
-    });
-  }
-
-  return jsonResponse({
-    duplicate: true,
-    attendanceId: existing[ATTENDANCE_COLUMNS.ATTENDANCE_ID] || "",
-    attendedAt: serializeDateTime_(existing[ATTENDANCE_COLUMNS.ATTENDED_AT]),
-    processStatus: existing[ATTENDANCE_COLUMNS.PROCESS_STATUS] || "완료"
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var existing = findAttendance_(trainingId, staffId);
+  return successResponse({
+    duplicate: Boolean(existing),
+    attendanceId: existing ? text_(existing[ATTENDANCE.ID]) : "",
+    attendedAt: existing ? normalizeDateTime_(existing[ATTENDANCE.ATTENDED_AT]) : "",
+    processStatus: existing ? text_(existing[ATTENDANCE.STATUS]) : ""
   });
 }
 
-/**
- * Save QR attendance to 04_QR출석기록.
- *
- * Input: { trainingId: string, staffId: string, method?: string }
- * Output: { attendanceId, trainingId, attendedAt, status }
- * TODO: Connect with saveSignature() when signature flow is finalized.
- */
 function saveQrAttendance(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-
-  if (!trainingId || !staffId) {
-    return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_ATTENDANCE_KEYS");
-  }
-
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-  if (!training) {
-    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
-  }
-
-  const normalizedTraining = normalizeTrainingRow_(training);
-  if (!isActiveTrainingStatus(normalizedTraining.status)) {
-    return errorResponse("활성 교육만 QR 출석할 수 있습니다.", "INACTIVE_TRAINING");
-  }
-
-  if (!normalizedTraining.qrEnabled) {
-    return errorResponse("QR 출석을 사용하지 않는 교육입니다.", "QR_DISABLED");
-  }
-
-  const targetResult = extractJsonData(checkTrainingTarget({ trainingId: trainingId, staffId: staffId }));
-  if (!targetResult.isTarget) {
-    return errorResponse("교육 대상자가 아닙니다.", "NOT_TRAINING_TARGET");
-  }
-
-  const existing = findAttendance_(trainingId, staffId);
-
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var training = findTraining_(trainingId);
+  var staff = findByColumn_(SHEETS.STAFF, STAFF.ID, staffId);
+  if (!training) return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  if (!staff || !isActiveStaff_(staff)) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  if (!isActiveTraining_(training)) return errorResponse("활성 교육만 출석할 수 있습니다.", "INACTIVE_TRAINING");
+  var normalizedTraining = normalizeTraining_(training);
+  if (!normalizedTraining.qrEnabled) return errorResponse("QR 출석을 사용하지 않는 교육입니다.", "QR_DISABLED");
+  var target = findTarget_(trainingId, staffId);
+  if (!target) return errorResponse("교육 대상자가 아닙니다.", "NOT_TRAINING_TARGET");
+  var existing = findAttendance_(trainingId, staffId);
   if (existing) {
-    return jsonResponse({
-      attendanceId: existing[ATTENDANCE_COLUMNS.ATTENDANCE_ID] || "",
+    return successResponse({
+      attendanceId: text_(existing[ATTENDANCE.ID]),
       trainingId: trainingId,
-      attendedAt: serializeDateTime_(existing[ATTENDANCE_COLUMNS.ATTENDED_AT]),
+      trainingTitle: normalizedTraining.title,
+      attendedAt: normalizeDateTime_(existing[ATTENDANCE.ATTENDED_AT]),
       duplicate: true,
-      processStatus: existing[ATTENDANCE_COLUMNS.PROCESS_STATUS] || "중복",
+      processStatus: text_(existing[ATTENDANCE.STATUS]) || "중복",
+      signatureRequired: normalizedTraining.signatureRequired && !normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED]),
       status: "already"
     });
   }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-  const attendanceId = createId_("ATT");
-  const attendedAt = new Date();
-  const signatureRequired = normalizedTraining.signatureRequired && !targetResult.signatureExcluded;
-
-  appendRow(SHEET_NAMES.ATTENDANCE, {
-    [ATTENDANCE_COLUMNS.ATTENDANCE_ID]: attendanceId,
-    [ATTENDANCE_COLUMNS.TRAINING_ID]: trainingId,
-    [ATTENDANCE_COLUMNS.TRAINING_TITLE]: normalizedTraining.title,
-    [ATTENDANCE_COLUMNS.STAFF_ID]: staffId,
-    [ATTENDANCE_COLUMNS.STAFF_NAME]: staff ? staff[STAFF_COLUMNS.NAME] : "",
-    [ATTENDANCE_COLUMNS.DEPARTMENT]: staff ? staff[STAFF_COLUMNS.DEPARTMENT] : "",
-    [ATTENDANCE_COLUMNS.ATTENDED_AT]: attendedAt,
-    [ATTENDANCE_COLUMNS.METHOD]: payload && payload.method ? payload.method : "QR",
-    [ATTENDANCE_COLUMNS.DUPLICATE]: "N",
-    [ATTENDANCE_COLUMNS.PROCESS_STATUS]: "완료",
-    [ATTENDANCE_COLUMNS.RECORDER]: "GitHub Pages",
-    [ATTENDANCE_COLUMNS.NOTE]: signatureRequired ? "전자서명은 다음 단계에서 연결됩니다." : ""
-  });
-
-  return jsonResponse({
-    attendanceId: attendanceId,
+  var attendedAt = new Date();
+  var row = {};
+  row[ATTENDANCE.ID] = generateId_("ATT");
+  row[ATTENDANCE.TRAINING_ID] = trainingId;
+  row[ATTENDANCE.TRAINING_TITLE] = normalizedTraining.title;
+  row[ATTENDANCE.STAFF_ID] = staffId;
+  row[ATTENDANCE.STAFF_NAME] = text_(staff[STAFF.NAME]);
+  row[ATTENDANCE.DEPARTMENT] = text_(staff[STAFF.DEPARTMENT]);
+  row[ATTENDANCE.ATTENDED_AT] = attendedAt;
+  row[ATTENDANCE.METHOD] = text_(payload.method) || "QR";
+  row[ATTENDANCE.DUPLICATE] = "N";
+  row[ATTENDANCE.STATUS] = "완료";
+  row[ATTENDANCE.RECORDER] = "system";
+  row[ATTENDANCE.NOTE] = "";
+  appendRowByHeader(SHEETS.ATTENDANCE, row);
+  return successResponse({
+    attendanceId: row[ATTENDANCE.ID],
     trainingId: trainingId,
     trainingTitle: normalizedTraining.title,
-    attendedAt: serializeDateTime_(attendedAt),
+    attendedAt: normalizeDateTime_(attendedAt),
     duplicate: false,
     processStatus: "완료",
-    signatureRequired: signatureRequired,
+    signatureRequired: normalizedTraining.signatureRequired && !normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED]),
     status: "saved"
   });
 }
 
-/**
- * Check signature duplication from 05_전자서명기록.
- *
- * Input: { trainingId: string, staffId: string }
- * Output: { exists, signatureId, signedAt, fileUrl, saveStatus }
- */
+function getSignatureRequiredTrainings(payload) {
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var excludeSigned = payload.excludeSigned === undefined ? true : normalizeBoolean(payload.excludeSigned);
+  var staff = findByColumn_(SHEETS.STAFF, STAFF.ID, staffId);
+  if (!staff || !isActiveStaff_(staff)) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  var trainings = readTable(SHEETS.TRAININGS, [TRAINING.ID, TRAINING.TITLE]);
+  var targets = readTable(SHEETS.TARGETS, [TARGET.TRAINING_ID, TARGET.STAFF_ID]).filter(function (target) {
+    return text_(target[TARGET.STAFF_ID]) === staffId && isTargetRow_(target);
+  });
+  var attendances = readTableOptional_(SHEETS.ATTENDANCE);
+  var signatures = readTableOptional_(SHEETS.SIGNATURES);
+  var items = targets.map(function (target) {
+    var training = findInRows_(trainings, TRAINING.ID, target[TARGET.TRAINING_ID]);
+    if (!training) return null;
+    var normalized = normalizeTraining_(training);
+    if (!normalized.signatureRequired || normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED])) return null;
+    var attendance = findInRows2_(attendances, ATTENDANCE.TRAINING_ID, normalized.trainingId, ATTENDANCE.STAFF_ID, staffId);
+    var signature = findInRows2_(signatures, SIGNATURE.TRAINING_ID, normalized.trainingId, SIGNATURE.STAFF_ID, staffId);
+    if (excludeSigned && signature) return null;
+    var attendanceRequired = normalized.qrEnabled;
+    return {
+      trainingId: normalized.trainingId,
+      title: normalized.title,
+      date: normalized.date,
+      time: normalized.time,
+      place: normalized.place,
+      department: normalized.department,
+      attendanceRequired: attendanceRequired,
+      attendanceDone: Boolean(attendance),
+      attendedAt: attendance ? normalizeDateTime_(attendance[ATTENDANCE.ATTENDED_AT]) : "",
+      signatureDone: Boolean(signature),
+      signedAt: signature ? normalizeDateTime_(signature[SIGNATURE.SIGNED_AT]) : "",
+      selectable: !signature && (!attendanceRequired || Boolean(attendance)),
+      blockedReason: attendanceRequired && !attendance ? "출석 후 서명 가능" : ""
+    };
+  }).filter(Boolean).sort(compareSignatureItems_);
+  return successResponse({ staff: publicStaff_(staff), groups: groupByDate_(items) });
+}
+
 function checkSignatureExists(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-
-  if (!trainingId || !staffId) {
-    return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_SIGNATURE_KEYS");
-  }
-
-  const existing = findSignature_(trainingId, staffId);
-
-  if (!existing) {
-    return jsonResponse({
-      exists: false,
-      signatureId: "",
-      signedAt: "",
-      fileUrl: "",
-      saveStatus: ""
-    });
-  }
-
-  return jsonResponse({
-    exists: true,
-    signatureId: existing[SIGNATURE_COLUMNS.SIGNATURE_ID] || "",
-    signedAt: serializeDateTime_(existing[SIGNATURE_COLUMNS.SIGNED_AT]),
-    fileUrl: existing[SIGNATURE_COLUMNS.FILE_URL] || "",
-    fileId: existing[SIGNATURE_COLUMNS.FILE_ID] || "",
-    saveStatus: existing[SIGNATURE_COLUMNS.SAVE_STATUS] || "완료"
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var existing = findSignature_(trainingId, staffId);
+  return successResponse({
+    exists: Boolean(existing),
+    signatureId: existing ? text_(existing[SIGNATURE.ID]) : "",
+    signedAt: existing ? normalizeDateTime_(existing[SIGNATURE.SIGNED_AT]) : "",
+    fileUrl: existing ? text_(existing[SIGNATURE.FILE_URL]) : "",
+    fileId: existing ? text_(existing[SIGNATURE.FILE_ID]) : "",
+    saveStatus: existing ? text_(existing[SIGNATURE.STATUS]) : ""
   });
 }
 
-function getSignatureRequiredTrainings(payload) {
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-  const excludeSigned = payload && payload.excludeSigned !== undefined ? isTruthy(payload.excludeSigned) : true;
-
-  if (!staffId) {
-    return errorResponse("교직원ID가 필요합니다.", "MISSING_STAFF_ID");
-  }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
-    return String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
-      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
-  });
-  const trainings = readRows(SHEET_NAMES.TRAININGS);
-  const signatures = readRows(SHEET_NAMES.SIGNATURES);
-  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
-  const items = targets.map(function (target) {
-    const trainingId = String(target[TARGET_COLUMNS.TRAINING_ID] || "").trim();
-    const training = findInRows_(trainings, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-    if (!training) {
-      return null;
-    }
-
-    const normalizedTraining = normalizeTrainingRow_(training);
-    const signatureRequired = normalizedTraining.signatureRequired && !isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]);
-    if (!signatureRequired || !isActiveTrainingStatus(normalizedTraining.status)) {
-      return null;
-    }
-
-    const attendance = attendances.find(function (row) {
-      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const signature = signatures.find(function (row) {
-      return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-        String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const attendanceRequired = normalizedTraining.qrEnabled;
-    const attendanceDone = Boolean(attendance);
-    const signatureDone = Boolean(signature);
-    const selectable = !signatureDone && (!attendanceRequired || attendanceDone);
-
-    if (excludeSigned && signatureDone) {
-      return null;
-    }
-
-    return {
-      trainingId: normalizedTraining.trainingId,
-      title: normalizedTraining.title,
-      date: normalizedTraining.date,
-      time: normalizedTraining.time,
-      place: normalizedTraining.place || normalizedTraining.location,
-      department: normalizedTraining.department,
-      attendanceRequired: attendanceRequired,
-      attendanceDone: attendanceDone,
-      attendedAt: attendance ? serializeDateTime_(attendance[ATTENDANCE_COLUMNS.ATTENDED_AT]) : "",
-      signatureDone: signatureDone,
-      signedAt: signature ? serializeDateTime_(signature[SIGNATURE_COLUMNS.SIGNED_AT]) : "",
-      selectable: selectable,
-      blockedReason: signatureDone ? "이미 서명 완료" : attendanceRequired && !attendanceDone ? "출석 후 서명 가능" : ""
-    };
-  }).filter(Boolean);
-
-  items.sort(compareSignatureRequiredItems_);
-
-  const groupsByDate = {};
-  items.forEach(function (item) {
-    const date = item.date || "날짜 미입력";
-    if (!groupsByDate[date]) {
-      groupsByDate[date] = [];
-    }
-    groupsByDate[date].push(item);
-  });
-
-  const groups = Object.keys(groupsByDate).map(function (date) {
-    return {
-      date: date,
-      items: groupsByDate[date]
-    };
-  }).sort(function (a, b) {
-    return compareDateForSignature_(a.date, b.date);
-  });
-
-  return jsonResponse({
-    staff: normalizeStaffRow_(staff),
-    groups: groups
+function saveSignature(payload) {
+  return saveBulkSignature({
+    staffId: payload.staffId,
+    trainingIds: [payload.trainingId],
+    signatureImage: payload.signatureImage || payload.signatureImageBase64,
+    selectedDate: payload.selectedDate
   });
 }
 
 function saveBulkSignature(payload) {
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-  const trainingIds = payload && Array.isArray(payload.trainingIds) ? payload.trainingIds.map(function (id) {
-    return String(id || "").trim();
-  }).filter(Boolean) : [];
-  const signatureImage = payload && (payload.signatureImage || payload.signatureImageBase64)
-    ? String(payload.signatureImage || payload.signatureImageBase64)
-    : "";
-
-  if (!staffId || !trainingIds.length) {
-    return errorResponse("교직원ID와 서명할 교육이 필요합니다.", "MISSING_BULK_SIGNATURE_KEYS");
-  }
-
-  if (!signatureImage) {
-    return errorResponse("서명 이미지가 필요합니다.", "MISSING_SIGNATURE_IMAGE");
-  }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  const uniqueTrainingIds = Array.from(new Set(trainingIds));
-  const trainings = readRows(SHEET_NAMES.TRAININGS);
-  const targets = readRows(SHEET_NAMES.TARGETS);
-  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
-  const normalizedStaff = normalizeStaffRow_(staff);
-  const rowsToSave = [];
-  const skipped = [];
-
-  uniqueTrainingIds.forEach(function (trainingId) {
-    const training = findInRows_(trainings, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-    if (!training) {
-      skipped.push({ trainingId: trainingId, title: "", reason: "교육 정보 없음" });
-      return;
-    }
-
-    const normalizedTraining = normalizeTrainingRow_(training);
-    const target = targets.find(function (row) {
-      return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-        String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
-        isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
-    });
-
-    if (!target) {
-      skipped.push({ trainingId: trainingId, title: normalizedTraining.title, reason: "교육대상 아님" });
-      return;
-    }
-
-    if (!normalizedTraining.signatureRequired || isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED])) {
-      skipped.push({ trainingId: trainingId, title: normalizedTraining.title, reason: "서명 대상 아님" });
-      return;
-    }
-
-    if (findSignature_(trainingId, staffId)) {
-      skipped.push({ trainingId: trainingId, title: normalizedTraining.title, reason: "이미 서명 완료" });
-      return;
-    }
-
-    const attendanceRequired = normalizedTraining.qrEnabled;
-    const attendance = attendances.find(function (row) {
-      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-
-    if (attendanceRequired && !attendance) {
-      skipped.push({ trainingId: trainingId, title: normalizedTraining.title, reason: "출석 후 서명 가능" });
-      return;
-    }
-
-    rowsToSave.push({ training: normalizedTraining });
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var trainingIds = normalizeIdList_(payload.trainingIds || payload.trainingId);
+  var signatureImage = text_(payload.signatureImage || payload.signatureImageBase64);
+  if (!trainingIds.length) return errorResponse("서명할 교육을 선택해 주세요.", "MISSING_SIGNATURE_TRAININGS");
+  if (!signatureImage) return errorResponse("서명 이미지가 필요합니다.", "MISSING_SIGNATURE_IMAGE");
+  var staff = findByColumn_(SHEETS.STAFF, STAFF.ID, staffId);
+  if (!staff || !isActiveStaff_(staff)) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  var normalizedStaff = publicStaff_(staff);
+  var trainings = readTable(SHEETS.TRAININGS, [TRAINING.ID, TRAINING.TITLE]);
+  var rowsToSave = [];
+  var skipped = [];
+  trainingIds.forEach(function (trainingId) {
+    var training = findInRows_(trainings, TRAINING.ID, trainingId);
+    var normalized = training ? normalizeTraining_(training) : null;
+    var target = findTarget_(trainingId, staffId);
+    if (!normalized) return skipped.push({ trainingId: trainingId, title: "", reason: "교육 정보 없음" });
+    if (!target) return skipped.push({ trainingId: trainingId, title: normalized.title, reason: "교육대상 아님" });
+    if (!normalized.signatureRequired || normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED])) return skipped.push({ trainingId: trainingId, title: normalized.title, reason: "서명 대상 아님" });
+    if (findSignature_(trainingId, staffId)) return skipped.push({ trainingId: trainingId, title: normalized.title, reason: "이미 서명 완료" });
+    if (normalized.qrEnabled && !findAttendance_(trainingId, staffId)) return skipped.push({ trainingId: trainingId, title: normalized.title, reason: "출석 후 서명 가능" });
+    rowsToSave.push(normalized);
   });
-
   if (!rowsToSave.length) {
-    return jsonResponse({
-      status: "skipped",
-      savedCount: 0,
-      skippedCount: skipped.length,
-      rows: [],
-      skipped: skipped
-    });
+    return successResponse({ status: "skipped", savedCount: 0, skippedCount: skipped.length, rows: [], skipped: skipped });
   }
-
-  const folderId = getSignatureFolderId_();
-  if (!folderId) {
-    return errorResponse("전자서명 저장 폴더가 설정되지 않았습니다.", "SIGNATURE_FOLDER_NOT_CONFIGURED");
-  }
-
-  const signedAt = new Date();
-  const fileSignatureId = createId_("SIG");
-  const blob = signatureImageBlob_(signatureImage, fileSignatureId + ".png");
-  const folder = DriveApp.getFolderById(folderId);
-  const file = folder.createFile(blob);
-  const fileUrl = file.getUrl();
-  const fileId = file.getId();
-  const uniqueDates = Array.from(new Set(rowsToSave.map(function (row) {
-    return row.training.date || "";
-  }).filter(Boolean)));
-  const noteDate = uniqueDates.length === 1 ? uniqueDates[0] : "복수날짜";
-  const note = "일괄서명 / " + (payload && payload.selectedDate ? String(payload.selectedDate).trim() : noteDate);
-  const rows = rowsToSave.map(function (item) {
-    const signatureId = rowsToSave.length === 1 ? fileSignatureId : createId_("SIG");
-    appendRow(SHEET_NAMES.SIGNATURES, {
-      [SIGNATURE_COLUMNS.SIGNATURE_ID]: signatureId,
-      [SIGNATURE_COLUMNS.TRAINING_ID]: item.training.trainingId,
-      [SIGNATURE_COLUMNS.TRAINING_TITLE]: item.training.title,
-      [SIGNATURE_COLUMNS.STAFF_ID]: staffId,
-      [SIGNATURE_COLUMNS.STAFF_NAME]: normalizedStaff.name,
-      [SIGNATURE_COLUMNS.DEPARTMENT]: normalizedStaff.department,
-      [SIGNATURE_COLUMNS.SIGNED_AT]: signedAt,
-      [SIGNATURE_COLUMNS.FILE_URL]: fileUrl,
-      [SIGNATURE_COLUMNS.FILE_ID]: fileId,
-      [SIGNATURE_COLUMNS.SAVE_STATUS]: "완료",
-      [SIGNATURE_COLUMNS.NOTE]: note
-    });
-
+  var folderId = signatureFolderId_(rowsToSave[0]);
+  if (!folderId) return errorResponse("전자서명 저장 폴더가 설정되지 않았습니다. 관리자에게 문의해 주세요.", "SIGNATURE_FOLDER_NOT_CONFIGURED");
+  var signedAt = new Date();
+  var fileSignatureId = generateId_("SIG");
+  var file = DriveApp.getFolderById(folderId).createFile(base64Blob_(signatureImage, "image/png", fileSignatureId + ".png"));
+  var fileUrl = file.getUrl();
+  var fileId = file.getId();
+  var dates = unique_(rowsToSave.map(function (training) { return training.date; }).filter(Boolean));
+  var note = "일괄서명 / " + (payload.selectedDate || (dates.length === 1 ? dates[0] : "복수날짜"));
+  var savedRows = rowsToSave.map(function (training) {
+    var row = {};
+    row[SIGNATURE.ID] = rowsToSave.length === 1 ? fileSignatureId : generateId_("SIG");
+    row[SIGNATURE.TRAINING_ID] = training.trainingId;
+    row[SIGNATURE.TRAINING_TITLE] = training.title;
+    row[SIGNATURE.STAFF_ID] = staffId;
+    row[SIGNATURE.STAFF_NAME] = normalizedStaff.name;
+    row[SIGNATURE.DEPARTMENT] = normalizedStaff.department;
+    row[SIGNATURE.SIGNED_AT] = signedAt;
+    row[SIGNATURE.FILE_URL] = fileUrl;
+    row[SIGNATURE.FILE_ID] = fileId;
+    row[SIGNATURE.STATUS] = "완료";
+    row[SIGNATURE.NOTE] = rowsToSave.length > 1 ? note : "";
+    appendRowByHeader(SHEETS.SIGNATURES, row);
     return {
-      signatureId: signatureId,
-      trainingId: item.training.trainingId,
-      trainingTitle: item.training.title,
-      date: item.training.date,
-      signedAt: serializeDateTime_(signedAt),
+      signatureId: row[SIGNATURE.ID],
+      trainingId: training.trainingId,
+      trainingTitle: training.title,
+      date: training.date,
+      signedAt: normalizeDateTime_(signedAt),
       fileUrl: fileUrl,
       fileId: fileId,
       saveStatus: "완료"
     };
   });
-
-  return jsonResponse({
+  return successResponse({
     status: "saved",
-    savedCount: rows.length,
+    savedCount: savedRows.length,
     skippedCount: skipped.length,
-    rows: rows,
+    rows: savedRows,
     skipped: skipped,
     staff: normalizedStaff,
-    signedAt: serializeDateTime_(signedAt),
+    signedAt: normalizeDateTime_(signedAt),
     fileUrl: fileUrl,
     fileId: fileId
   });
 }
 
-/**
- * Save signature image to Google Drive and metadata to 05_전자서명기록.
- *
- * Input: { trainingId: string, staffId: string, signatureImageBase64: string }
- * Output: saved signature metadata.
- */
-function saveSignature(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-  const signatureImageBase64 = payload && payload.signatureImageBase64 ? String(payload.signatureImageBase64) : "";
-
-  if (!trainingId || !staffId) {
-    return errorResponse("교육ID와 교직원ID가 필요합니다.", "MISSING_SIGNATURE_KEYS");
-  }
-
-  if (!signatureImageBase64) {
-    return errorResponse("서명 이미지가 필요합니다.", "MISSING_SIGNATURE_IMAGE");
-  }
-
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-  if (!training) {
-    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
-  }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  const existing = findSignature_(trainingId, staffId);
-  if (existing) {
-    return jsonResponse({
-      status: "already",
-      duplicate: true,
-      signatureId: existing[SIGNATURE_COLUMNS.SIGNATURE_ID] || "",
-      trainingId: trainingId,
-      staffId: staffId,
-      signedAt: serializeDateTime_(existing[SIGNATURE_COLUMNS.SIGNED_AT]),
-      fileUrl: existing[SIGNATURE_COLUMNS.FILE_URL] || "",
-      fileId: existing[SIGNATURE_COLUMNS.FILE_ID] || "",
-      saveStatus: existing[SIGNATURE_COLUMNS.SAVE_STATUS] || "완료"
-    });
-  }
-
-  const folderId = getSignatureFolderId_();
-  if (!folderId) {
-    return errorResponse("전자서명 저장 폴더가 설정되지 않았습니다.", "SIGNATURE_FOLDER_NOT_CONFIGURED");
-  }
-
-  const normalizedTraining = normalizeTrainingRow_(training);
-  const normalizedStaff = normalizeStaffRow_(staff);
-  const signedAt = new Date();
-  const signatureId = createId_("SIG");
-  const blob = signatureImageBlob_(signatureImageBase64, signatureId + ".png");
-  const folder = DriveApp.getFolderById(folderId);
-  const file = folder.createFile(blob);
-  const fileUrl = file.getUrl();
-  const fileId = file.getId();
-
-  appendRow(SHEET_NAMES.SIGNATURES, {
-    [SIGNATURE_COLUMNS.SIGNATURE_ID]: signatureId,
-    [SIGNATURE_COLUMNS.TRAINING_ID]: trainingId,
-    [SIGNATURE_COLUMNS.TRAINING_TITLE]: normalizedTraining.title,
-    [SIGNATURE_COLUMNS.STAFF_ID]: staffId,
-    [SIGNATURE_COLUMNS.STAFF_NAME]: normalizedStaff.name,
-    [SIGNATURE_COLUMNS.DEPARTMENT]: normalizedStaff.department,
-    [SIGNATURE_COLUMNS.SIGNED_AT]: signedAt,
-    [SIGNATURE_COLUMNS.FILE_URL]: fileUrl,
-    [SIGNATURE_COLUMNS.FILE_ID]: fileId,
-    [SIGNATURE_COLUMNS.SAVE_STATUS]: "완료",
-    [SIGNATURE_COLUMNS.NOTE]: ""
-  });
-
-  return jsonResponse({
-    status: "saved",
-    duplicate: false,
-    signatureId: signatureId,
-    trainingId: trainingId,
-    trainingTitle: normalizedTraining.title,
-    staffId: staffId,
-    staffName: normalizedStaff.name,
-    department: normalizedStaff.department,
-    signedAt: serializeDateTime_(signedAt),
-    fileUrl: fileUrl,
-    fileId: fileId,
-    saveStatus: "완료"
-  });
-}
-
-/**
- * Read current user's training status.
- *
- * Input: { staffId: string }
- * Output: staff-scoped target trainings with attendance/signature/certificate summary.
- */
-function getMyTrainingStatus(payload) {
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-
-  if (!staffId) {
-    return errorResponse("교직원ID가 필요합니다.", "MISSING_STAFF_ID");
-  }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  return buildMyTrainingStatusResponse_(staff);
-}
-
-/**
- * Read current user's training status by name and optional department.
- *
- * Input: { name: string, department?: string }
- * Output: one staff member's target trainings with attendance/signature/certificate summary.
- */
-function getMyTrainingStatusByNameDept(payload) {
-  const name = payload && payload.name ? String(payload.name).trim() : "";
-  const department = payload && payload.department ? String(payload.department).trim() : "";
-
-  if (!name) {
-    return errorResponse("성명을 입력해주세요.", "MISSING_STAFF_NAME");
-  }
-
-  const matchesByName = readRows(SHEET_NAMES.STAFF).filter(function (row) {
-    return isActiveStaff(row) && String(row[STAFF_COLUMNS.NAME] || "").trim() === name;
-  });
-
-  if (!matchesByName.length) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  const matches = department ? matchesByName.filter(function (row) {
-    return String(row[STAFF_COLUMNS.DEPARTMENT] || "").trim() === department;
-  }) : matchesByName;
-
-  if (!matches.length) {
-    return errorResponse("성명과 소속부서를 확인해 주세요.", "STAFF_NOT_FOUND");
-  }
-
-  if (matches.length > 1) {
-    return errorResponse("동명이인이 있습니다. 소속부서를 입력해 주세요.", "DUPLICATE_STAFF_NAME");
-  }
-
-  return buildMyTrainingStatusResponse_(matches[0]);
-}
-
-function buildMyTrainingStatusResponse_(staff) {
-  const staffId = String(staff[STAFF_COLUMNS.STAFF_ID] || "").trim();
-  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
-    return String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
-      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
-  });
-  const trainings = readRows(SHEET_NAMES.TRAININGS);
-  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
-  const signatures = readRows(SHEET_NAMES.SIGNATURES);
-  const certificates = readRowsOptional_(SHEET_NAMES.CERTIFICATES);
-
-  const items = targets.map(function (target) {
-    const trainingId = target[TARGET_COLUMNS.TRAINING_ID] || "";
-    const training = findInRows_(trainings, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-    const normalizedTraining = training ? normalizeTrainingRow_(training) : {
-      trainingId: trainingId,
-      title: "",
-      date: "",
-      time: "",
-      place: "",
-      location: "",
-      department: "",
-      category: "",
-      qrEnabled: true,
-      signatureRequired: false,
-      certificateRequired: false,
-      status: "",
-      activeStatus: ""
-    };
-    const attendance = attendances.find(function (row) {
-      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const signature = signatures.find(function (row) {
-      return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-        String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const certificate = findCertificate_(certificates, trainingId, staffId);
-    const signatureRequired = normalizedTraining.signatureRequired && !isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]);
-    const certificateRequired = Boolean(normalizedTraining.certificateRequired);
-    const attendanceCompleted = Boolean(attendance);
-    const signatureCompleted = signatureRequired ? Boolean(signature) : true;
-    const certificateSubmitted = certificateRequired ? Boolean(certificate) : false;
-    const certificateApproved = certificate ? isApprovedCertificate_(certificate) : false;
-    const finalStatus = calculateTrainingStatus_({
-      attendanceCompleted: attendanceCompleted,
-      signatureRequired: signatureRequired,
-      signatureCompleted: signatureCompleted,
-      certificateRequired: certificateRequired,
-      certificateSubmitted: certificateSubmitted,
-      certificateApproved: certificateApproved
-    });
-
-    return {
-      trainingId: trainingId,
-      title: normalizedTraining.title,
-      date: normalizedTraining.date,
-      time: normalizedTraining.time,
-      place: normalizedTraining.place || normalizedTraining.location,
-      department: normalizedTraining.department,
-      required: isTruthy(target[TARGET_COLUMNS.REQUIRED]),
-      attendanceRequired: true,
-      attendanceCompleted: attendanceCompleted,
-      signatureRequired: signatureRequired,
-      signatureCompleted: signatureRequired ? Boolean(signature) : false,
-      certificateRequired: certificateRequired,
-      certificateSubmitted: certificateSubmitted,
-      certificateApproved: certificateApproved,
-      finalStatus: finalStatus.label,
-      statusGroup: finalStatus.group,
-      attendedAt: attendance ? serializeDateTime_(attendance[ATTENDANCE_COLUMNS.ATTENDED_AT]) : "",
-      signedAt: signature ? serializeDateTime_(signature[SIGNATURE_COLUMNS.SIGNED_AT]) : "",
-      certificateSubmittedAt: certificate ? serializeDateTime_(certificate[CERTIFICATE_COLUMNS.SUBMITTED_AT] || certificate["제출일"] || certificate["등록일시"]) : ""
-    };
-  }).sort(function (a, b) {
-    return statusPriority_(a.statusGroup) - statusPriority_(b.statusGroup) ||
-      String(a.date || "").localeCompare(String(b.date || ""));
-  });
-
-  const summary = {
-    total: items.length,
-    completed: items.filter(function (item) {
-      return item.statusGroup === "completed";
-    }).length,
-    certificateSubmitted: items.filter(function (item) {
-      return item.certificateRequired && item.certificateSubmitted;
-    }).length,
-    certificateMissing: items.filter(function (item) {
-      return item.certificateRequired && !item.certificateSubmitted;
-    }).length,
-    incomplete: items.filter(function (item) {
-      return item.statusGroup === "incomplete";
-    }).length,
-    review: items.filter(function (item) {
-      return item.statusGroup === "review";
-    }).length
-  };
-
-  return jsonResponse({
-    staff: normalizeStaffRow_(staff),
-    summary: summary,
-    items: items
-  });
-}
-
-/**
- * Read certificate-required target trainings for one staff member by name and optional department.
- *
- * Input: { name: string, department?: string }
- * Output: staff info and certificate-required training items only.
- */
 function getCertificateRequiredTrainings(payload) {
-  const staffLookup = findActiveStaffByNameDept_(payload && payload.name, payload && payload.department);
-
-  if (!staffLookup.ok) {
-    return staffLookup.response;
-  }
-
-  const staff = staffLookup.staff;
-  const staffId = String(staff[STAFF_COLUMNS.STAFF_ID] || "").trim();
-  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
-    return String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
-      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
+  var staffResult = findStaffByNameDept_(payload.name, payload.department);
+  if (!staffResult.ok) return staffResult.response;
+  var staff = staffResult.row;
+  var staffId = text_(staff[STAFF.ID]);
+  var targets = readTable(SHEETS.TARGETS, [TARGET.TRAINING_ID, TARGET.STAFF_ID]).filter(function (row) {
+    return text_(row[TARGET.STAFF_ID]) === staffId && isTargetRow_(row);
   });
-  const trainings = readRows(SHEET_NAMES.TRAININGS);
-  const certificates = readRowsOptional_(SHEET_NAMES.CERTIFICATES);
-
-  const items = targets.map(function (target) {
-    const trainingId = target[TARGET_COLUMNS.TRAINING_ID] || "";
-    const training = findInRows_(trainings, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-
-    if (!training) {
-      return null;
-    }
-
-    const normalizedTraining = normalizeTrainingRow_(training);
-
-    if (!normalizedTraining.certificateRequired) {
-      return null;
-    }
-
-    const certificate = findCertificate_(certificates, trainingId, staffId);
-    const submittedAt = certificate ? serializeDateTime_(certificate[CERTIFICATE_COLUMNS.SUBMITTED_AT] || certificate["제출일시"] || certificate["제출일"]) : "";
-    const status = certificate ?
-      String(certificate[CERTIFICATE_COLUMNS.APPROVAL_STATUS] || certificate[CERTIFICATE_COLUMNS.SUBMIT_STATUS] || certificate["상태"] || "승인대기").trim() :
-      "미제출";
-
+  var trainings = readTable(SHEETS.TRAININGS, [TRAINING.ID, TRAINING.TITLE]);
+  var certificates = readTableOptional_(SHEETS.CERTIFICATES);
+  var items = targets.map(function (target) {
+    var training = findInRows_(trainings, TRAINING.ID, target[TARGET.TRAINING_ID]);
+    if (!training) return null;
+    var normalized = normalizeTraining_(training);
+    if (!normalized.certificateRequired) return null;
+    var certificate = findCertificate_(normalized.trainingId, staffId, certificates);
     return {
-      trainingId: normalizedTraining.trainingId,
-      title: normalizedTraining.title,
-      date: normalizedTraining.date,
-      time: normalizedTraining.time,
-      place: normalizedTraining.place,
-      department: normalizedTraining.department,
+      trainingId: normalized.trainingId,
+      title: normalized.title,
+      date: normalized.date,
+      time: normalized.time,
+      place: normalized.place,
+      department: normalized.department,
       certificateRequired: true,
       certificateSubmitted: Boolean(certificate),
-      submittedAt: submittedAt,
-      status: status,
-      fileUrl: certificate ? String(certificate[CERTIFICATE_COLUMNS.FILE_URL] || certificate["파일URL"] || certificate["이수증파일URL"] || "").trim() : ""
+      submittedAt: certificate ? normalizeDateTime_(certificate[CERTIFICATE.SUBMITTED_AT]) : "",
+      status: certificate ? text_(certificate[CERTIFICATE.STATUS]) || "승인대기" : "미제출",
+      fileUrl: certificate ? text_(certificate[CERTIFICATE.FILE_URL]) : ""
     };
   }).filter(Boolean).sort(function (a, b) {
-    if (a.certificateSubmitted !== b.certificateSubmitted) {
-      return a.certificateSubmitted ? 1 : -1;
-    }
-
-    return String(a.date || "").localeCompare(String(b.date || ""));
+    if (a.certificateSubmitted !== b.certificateSubmitted) return a.certificateSubmitted ? 1 : -1;
+    return String(a.date).localeCompare(String(b.date));
   });
-
-  return jsonResponse({
-    staff: normalizeStaffRow_(staff),
+  return successResponse({
+    staff: publicStaff_(staff),
     items: items,
     summary: {
       total: items.length,
-      submitted: items.filter(function (item) {
-        return item.certificateSubmitted;
-      }).length,
-      missing: items.filter(function (item) {
-        return !item.certificateSubmitted;
-      }).length
+      submitted: items.filter(function (item) { return item.certificateSubmitted; }).length,
+      missing: items.filter(function (item) { return !item.certificateSubmitted; }).length
     }
   });
 }
 
-/**
- * Save certificate file to Google Drive and metadata to 06_이수증제출.
- *
- * Input: { trainingId, staffId, completedDate, issuer, certificateNumber, fileName, fileMimeType, fileBase64 }
- * Output: saved certificate submission metadata.
- */
 function saveCertificateSubmission(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-  const staffId = payload && payload.staffId ? String(payload.staffId).trim() : "";
-  const completedDate = payload && payload.completedDate ? String(payload.completedDate).trim() : "";
-  const issuer = payload && payload.issuer ? String(payload.issuer).trim() : "";
-  const certificateNumber = payload && payload.certificateNumber ? String(payload.certificateNumber).trim() : "";
-  const fileName = payload && payload.fileName ? String(payload.fileName).trim() : "";
-  const fileMimeType = payload && payload.fileMimeType ? String(payload.fileMimeType).trim() : "";
-  const fileBase64 = payload && payload.fileBase64 ? String(payload.fileBase64) : "";
-
-  if (!trainingId || !staffId) {
-    return errorResponse("교육과 교직원 정보가 필요합니다.", "MISSING_CERTIFICATE_KEYS");
-  }
-
-  if (!completedDate || !issuer) {
-    return errorResponse("이수일자와 이수기관을 입력해 주세요.", "MISSING_CERTIFICATE_FIELDS");
-  }
-
-  if (!fileName || !fileMimeType || !fileBase64) {
-    return errorResponse("이수증 파일을 선택해 주세요.", "MISSING_CERTIFICATE_FILE");
-  }
-
-  const normalizedMimeType = normalizeCertificateMimeType_(fileName, fileMimeType);
-
-  if (["application/pdf", "image/jpeg", "image/png"].indexOf(normalizedMimeType) === -1) {
-    return errorResponse("PDF, JPG, PNG 파일만 제출할 수 있습니다.", "UNSUPPORTED_CERTIFICATE_FILE");
-  }
-
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-  if (!training) {
-    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
-  }
-
-  const normalizedTraining = normalizeTrainingRow_(training);
-  if (!normalizedTraining.certificateRequired) {
-    return errorResponse("이수증 제출 대상 교육이 아닙니다.", "CERTIFICATE_NOT_REQUIRED");
-  }
-
-  const staff = findByColumn(SHEET_NAMES.STAFF, STAFF_COLUMNS.STAFF_ID, staffId);
-  if (!staff || !isActiveStaff(staff)) {
-    return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
-  }
-
-  const target = readRows(SHEET_NAMES.TARGETS).find(function (row) {
-    return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-      String(row[TARGET_COLUMNS.STAFF_ID] || "").trim() === staffId &&
-      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
-  });
-
-  if (!target) {
-    return errorResponse("해당 교육 대상자가 아닙니다.", "NOT_TRAINING_TARGET");
-  }
-
-  const folderId = getCertificateFolderId_();
-  if (!folderId) {
-    return errorResponse("이수증 저장 폴더가 설정되지 않았습니다. 관리자에게 문의해 주세요.", "CERTIFICATE_FOLDER_NOT_CONFIGURED");
-  }
-
-  const normalizedStaff = normalizeStaffRow_(staff);
-  const submittedAt = new Date();
-  const submissionId = createId_("CERT");
-  const safeFileName = submissionId + "_" + fileName.replace(/[\\/:*?"<>|]/g, "_");
-  const blob = certificateFileBlob_(fileBase64, normalizedMimeType, safeFileName);
-  const folder = DriveApp.getFolderById(folderId);
-  const file = folder.createFile(blob);
-  const fileUrl = file.getUrl();
-  const fileId = file.getId();
-
-  appendRow(SHEET_NAMES.CERTIFICATES, {
-    [CERTIFICATE_COLUMNS.CERTIFICATE_ID]: submissionId,
-    [CERTIFICATE_COLUMNS.TRAINING_ID]: trainingId,
-    [CERTIFICATE_COLUMNS.TRAINING_TITLE]: normalizedTraining.title,
-    [CERTIFICATE_COLUMNS.STAFF_ID]: staffId,
-    [CERTIFICATE_COLUMNS.STAFF_NAME]: normalizedStaff.name,
-    [CERTIFICATE_COLUMNS.DEPARTMENT]: normalizedStaff.department,
-    [CERTIFICATE_COLUMNS.SUBMITTED_AT]: submittedAt,
-    [CERTIFICATE_COLUMNS.COMPLETED_DATE]: completedDate,
-    [CERTIFICATE_COLUMNS.ISSUER]: issuer,
-    [CERTIFICATE_COLUMNS.CERTIFICATE_NUMBER]: certificateNumber,
-    [CERTIFICATE_COLUMNS.FILE_URL]: fileUrl,
-    [CERTIFICATE_COLUMNS.FILE_ID]: fileId,
-    [CERTIFICATE_COLUMNS.SUBMIT_STATUS]: "승인대기",
-    [CERTIFICATE_COLUMNS.APPROVAL_STATUS]: "승인대기",
-    [CERTIFICATE_COLUMNS.REVIEWER]: "",
-    [CERTIFICATE_COLUMNS.NOTE]: "",
-    "제출ID": submissionId,
-    "교육ID": trainingId,
-    "교육명": normalizedTraining.title,
-    "교직원ID": staffId,
-    "성명": normalizedStaff.name,
-    "부서": normalizedStaff.department,
-    "제출일시": submittedAt,
-    "이수일자": completedDate,
-    "이수기관": issuer,
-    "이수증번호": certificateNumber,
-    "파일URL": fileUrl,
-    "상태": "승인대기",
-    "확인자": "",
-    "비고": ""
-  });
-
-  return jsonResponse({
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var fileBase64 = requireText_(payload.fileBase64, "이수증 파일이 필요합니다.", "MISSING_CERTIFICATE_FILE");
+  var training = findTraining_(trainingId);
+  var staff = findByColumn_(SHEETS.STAFF, STAFF.ID, staffId);
+  if (!training) return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  if (!staff || !isActiveStaff_(staff)) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  var normalizedTraining = normalizeTraining_(training);
+  if (!normalizedTraining.certificateRequired) return errorResponse("이수증 제출 대상 교육이 아닙니다.", "CERTIFICATE_NOT_REQUIRED");
+  var folderId = certificateFolderId_(normalizedTraining);
+  if (!folderId) return errorResponse("이수증 저장 폴더가 설정되지 않았습니다. 관리자에게 문의해 주세요.", "CERTIFICATE_FOLDER_NOT_CONFIGURED");
+  var submittedAt = new Date();
+  var submissionId = generateId_("CERT");
+  var fileName = safeFileName_(payload.fileName || submissionId + ".pdf");
+  var mimeType = text_(payload.fileMimeType) || mimeTypeFromName_(fileName);
+  var file = DriveApp.getFolderById(folderId).createFile(base64Blob_(fileBase64, mimeType, fileName));
+  var row = {};
+  row[CERTIFICATE.ID] = submissionId;
+  row[CERTIFICATE.TRAINING_ID] = trainingId;
+  row[CERTIFICATE.TRAINING_TITLE] = normalizedTraining.title;
+  row[CERTIFICATE.STAFF_ID] = staffId;
+  row[CERTIFICATE.STAFF_NAME] = text_(staff[STAFF.NAME]);
+  row[CERTIFICATE.DEPARTMENT] = text_(staff[STAFF.DEPARTMENT]);
+  row[CERTIFICATE.SUBMITTED_AT] = submittedAt;
+  row[CERTIFICATE.COMPLETED_DATE] = text_(payload.completedDate);
+  row[CERTIFICATE.ISSUER] = text_(payload.issuer);
+  row[CERTIFICATE.CERTIFICATE_NUMBER] = text_(payload.certificateNumber);
+  row[CERTIFICATE.FILE_URL] = file.getUrl();
+  row[CERTIFICATE.FILE_ID] = file.getId();
+  row[CERTIFICATE.STATUS] = "승인대기";
+  row[CERTIFICATE.REVIEWER] = "";
+  row[CERTIFICATE.NOTE] = "";
+  appendRowByHeader(SHEETS.CERTIFICATES, row);
+  return successResponse({
     submissionId: submissionId,
     trainingId: trainingId,
     trainingTitle: normalizedTraining.title,
     staffId: staffId,
-    staffName: normalizedStaff.name,
-    department: normalizedStaff.department,
-    submittedAt: serializeDateTime_(submittedAt),
-    fileUrl: fileUrl,
-    fileId: fileId,
+    staffName: text_(staff[STAFF.NAME]),
+    department: text_(staff[STAFF.DEPARTMENT]),
+    submittedAt: normalizeDateTime_(submittedAt),
+    fileUrl: file.getUrl(),
+    fileId: file.getId(),
     status: "승인대기"
   });
 }
 
-/**
- * Read target attendance/signature status for one training.
- *
- * Input: { trainingId: string }
- * Output: target staff rows with attendance/signature/final status summary.
- */
+function getMyTrainingStatus(payload) {
+  var staffId = requireText_(payload.staffId, "교직원ID가 필요합니다.", "MISSING_STAFF_ID");
+  var staff = findByColumn_(SHEETS.STAFF, STAFF.ID, staffId);
+  if (!staff || !isActiveStaff_(staff)) return errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND");
+  return buildMyTrainingStatus_(staff);
+}
+
+function getMyTrainingStatusByNameDept(payload) {
+  var staffResult = findStaffByNameDept_(payload.name, payload.department);
+  if (!staffResult.ok) return staffResult.response;
+  return buildMyTrainingStatus_(staffResult.row);
+}
+
 function getTrainingAttendanceStatus(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-
-  if (!trainingId) {
-    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
-  }
-
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-
-  if (!training) {
-    return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
-  }
-
-  const normalizedTraining = normalizeTrainingRow_(training);
-  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
-    return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
+  var trainingId = requireText_(payload.trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var training = findTraining_(trainingId);
+  if (!training) return errorResponse("교육 정보를 찾을 수 없습니다.", "TRAINING_NOT_FOUND");
+  var normalizedTraining = normalizeTraining_(training);
+  var targets = readTable(SHEETS.TARGETS, [TARGET.TRAINING_ID, TARGET.STAFF_ID]).filter(function (row) {
+    return text_(row[TARGET.TRAINING_ID]) === trainingId && isTargetRow_(row);
   });
-  const staffRows = readRows(SHEET_NAMES.STAFF);
-  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
-  const signatures = readRows(SHEET_NAMES.SIGNATURES);
-
-  const items = targets.map(function (target) {
-    const staffId = String(target[TARGET_COLUMNS.STAFF_ID] || "").trim();
-    const staff = findInRows_(staffRows, STAFF_COLUMNS.STAFF_ID, staffId);
-    const attendance = attendances.find(function (row) {
-      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const signature = signatures.find(function (row) {
-      return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === trainingId &&
-        String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const signatureRequired = normalizedTraining.signatureRequired && !isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]);
-    const attendanceCompleted = Boolean(attendance);
-    const signatureCompleted = Boolean(signature);
-    const finalStatus = calculateAttendanceAdminStatus_({
-      attendanceCompleted: attendanceCompleted,
-      signatureRequired: signatureRequired,
-      signatureCompleted: signatureCompleted
-    });
-
+  var staffRows = readTable(SHEETS.STAFF, [STAFF.ID, STAFF.NAME]);
+  var attendances = readTableOptional_(SHEETS.ATTENDANCE);
+  var signatures = readTableOptional_(SHEETS.SIGNATURES);
+  var items = targets.map(function (target) {
+    var staff = findInRows_(staffRows, STAFF.ID, target[STAFF.ID] || target[TARGET.STAFF_ID]);
+    var staffId = text_(target[TARGET.STAFF_ID]);
+    var attendance = findInRows2_(attendances, ATTENDANCE.TRAINING_ID, trainingId, ATTENDANCE.STAFF_ID, staffId);
+    var signature = findInRows2_(signatures, SIGNATURE.TRAINING_ID, trainingId, SIGNATURE.STAFF_ID, staffId);
+    var signatureRequired = normalizedTraining.signatureRequired && !normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED]);
+    var statusGroup = !attendance ? "absent" : signatureRequired && !signature ? "signature" : "completed";
     return {
       trainingId: trainingId,
       staffId: staffId,
-      name: staff ? staff[STAFF_COLUMNS.NAME] || "" : "",
-      department: staff ? staff[STAFF_COLUMNS.DEPARTMENT] || "" : "",
-      position: staff ? staff[STAFF_COLUMNS.POSITION] || "" : "",
+      name: staff ? text_(staff[STAFF.NAME]) : "",
+      department: staff ? text_(staff[STAFF.DEPARTMENT]) : "",
+      position: staff ? text_(staff[STAFF.POSITION]) : "",
       isTarget: true,
-      required: isTruthy(target[TARGET_COLUMNS.REQUIRED]),
-      attendanceCompleted: attendanceCompleted,
-      attendedAt: attendance ? serializeDateTime_(attendance[ATTENDANCE_COLUMNS.ATTENDED_AT]) : "",
+      required: normalizeBoolean(target[TARGET.REQUIRED]),
+      attendanceCompleted: Boolean(attendance),
+      attendedAt: attendance ? normalizeDateTime_(attendance[ATTENDANCE.ATTENDED_AT]) : "",
       signatureRequired: signatureRequired,
-      signatureCompleted: signatureCompleted,
-      signedAt: signature ? serializeDateTime_(signature[SIGNATURE_COLUMNS.SIGNED_AT]) : "",
-      finalStatus: finalStatus.label,
-      statusGroup: finalStatus.group
+      signatureCompleted: signatureRequired ? Boolean(signature) : false,
+      signedAt: signature ? normalizeDateTime_(signature[SIGNATURE.SIGNED_AT]) : "",
+      finalStatus: statusGroup === "completed" ? "완료" : statusGroup === "signature" ? "서명 필요" : "미출석",
+      statusGroup: statusGroup
     };
-  }).sort(function (a, b) {
-    return adminStatusPriority_(a.statusGroup) - adminStatusPriority_(b.statusGroup) ||
-      String(a.department || "").localeCompare(String(b.department || "")) ||
-      String(a.name || "").localeCompare(String(b.name || ""));
   });
-
-  const summary = {
-    targetCount: items.length,
-    attendanceCompleted: items.filter(function (item) {
-      return item.attendanceCompleted;
-    }).length,
-    signatureCompleted: items.filter(function (item) {
-      return item.signatureCompleted;
-    }).length,
-    incomplete: items.filter(function (item) {
-      return item.statusGroup !== "completed";
-    }).length
-  };
-
-  return jsonResponse({
+  return successResponse({
     training: normalizedTraining,
-    summary: summary,
+    summary: {
+      targetCount: items.length,
+      attendanceCompleted: items.filter(function (item) { return item.attendanceCompleted; }).length,
+      signatureCompleted: items.filter(function (item) { return item.signatureCompleted; }).length,
+      incomplete: items.filter(function (item) { return item.statusGroup !== "completed"; }).length
+    },
     items: items
   });
 }
 
-/**
- * Preview final attendance roster rows.
- *
- * Input: { trainingId: string }
- * Output: final attendance rows and summary without writing to 08_최종서명부.
- */
 function getFinalAttendancePreview(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
-
-  if (!trainingId) {
-    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
-  }
-
-  return jsonResponse(buildFinalAttendanceRoster_(trainingId));
+  return buildFinalAttendance_(payload.trainingId, false);
 }
 
-/**
- * Generate final attendance roster rows and record them to 08_최종서명부.
- *
- * Input: { trainingId: string }
- * Output: final attendance rows and write count. CSV download is handled by GitHub Pages UI.
- */
 function generateFinalAttendanceSheet(payload) {
-  const trainingId = payload && payload.trainingId ? String(payload.trainingId).trim() : "";
+  return buildFinalAttendance_(payload.trainingId, true);
+}
 
-  if (!trainingId) {
-    return errorResponse("교육ID가 필요합니다.", "MISSING_TRAINING_ID");
-  }
+function getNotices() {
+  var rows = readTableOptional_(SHEETS.NOTICES);
+  return successResponse(rows.map(function (row) {
+    return {
+      noticeId: text_(row["공지ID"] || row["noticeId"]),
+      title: text_(row["제목"] || row["title"]),
+      content: text_(row["내용"] || row["content"]),
+      status: text_(row["상태"] || row["활성상태"] || row["status"]),
+      postedAt: normalizeDate_(row["게시일"] || row["postedAt"]),
+      note: text_(row["비고"] || row["note"])
+    };
+  }).filter(function (item) {
+    return !item.status || isActiveStatus_(item.status);
+  }));
+}
 
-  const roster = buildFinalAttendanceRoster_(trainingId);
-  const generatedAt = new Date();
+function getDepartments() {
+  var rows = readTableOptional_(SHEETS.DEPARTMENTS);
+  return successResponse(rows.map(function (row) {
+    return {
+      departmentId: text_(row["부서ID"] || row["departmentId"]),
+      name: text_(row["부서명"] || row["부서"] || row["name"]),
+      ownerName: text_(row["담당자"] || row["ownerName"]),
+      status: text_(row["상태"] || row["활성상태"] || row["status"]),
+      note: text_(row["비고"] || row["note"])
+    };
+  }));
+}
 
-  roster.rows.forEach(function (row) {
-    appendRow(SHEET_NAMES.FINAL_ROSTER, {
-      [FINAL_SHEET_COLUMNS.SEQUENCE]: row.sequence,
-      [FINAL_SHEET_COLUMNS.TRAINING_ID]: row.trainingId,
-      [FINAL_SHEET_COLUMNS.TRAINING_TITLE]: row.trainingTitle,
-      [FINAL_SHEET_COLUMNS.TRAINING_DATE]: row.trainingDate,
-      [FINAL_SHEET_COLUMNS.STAFF_NAME]: row.name,
-      [FINAL_SHEET_COLUMNS.DEPARTMENT]: row.department,
-      [FINAL_SHEET_COLUMNS.POSITION]: row.position,
-      [FINAL_SHEET_COLUMNS.ATTENDED_AT]: row.attendedAt,
-      [FINAL_SHEET_COLUMNS.SIGNATURE_STATUS]: row.signatureStatus,
-      [FINAL_SHEET_COLUMNS.SIGNATURE_FILE_URL]: row.signatureFileUrl,
-      [FINAL_SHEET_COLUMNS.COMPLETION_STATUS]: row.completionStatus,
-      [FINAL_SHEET_COLUMNS.NOTE]: row.note || "생성일시 " + serializeDateTime_(generatedAt)
-    });
-  });
+function getCodeValues() {
+  var rows = readTableOptional_(SHEETS.CODE_VALUES);
+  return successResponse(rows.map(function (row) {
+    return {
+      group: text_(row["코드그룹"] || row["group"]),
+      code: text_(row["코드"] || row["code"]),
+      label: text_(row["표시명"] || row["label"] || row["값"]),
+      value: text_(row["값"] || row["value"]),
+      sortOrder: Number(row["정렬순서"] || row["sortOrder"] || 0),
+      active: row["활성여부"] === undefined ? true : normalizeBoolean(row["활성여부"])
+    };
+  }));
+}
 
-  return jsonResponse({
-    status: "generated",
-    generatedAt: serializeDateTime_(generatedAt),
-    writtenCount: roster.rows.length,
-    training: roster.training,
-    summary: roster.summary,
-    rows: roster.rows
+function getAdminDashboardData() {
+  var trainings = readTableOptional_(SHEETS.TRAININGS).map(normalizeTraining_);
+  var attendance = readTableOptional_(SHEETS.ATTENDANCE);
+  var signatures = readTableOptional_(SHEETS.SIGNATURES);
+  return successResponse({
+    trainings: trainings.length,
+    activeTrainings: trainings.filter(function (training) { return isActiveStatus_(training.status); }).length,
+    attendanceRecords: attendance.length,
+    signatureRecords: signatures.length
   });
 }
 
-/**
- * Read admin dashboard summary.
- *
- * Input: none
- * Output: training summary counts and final roster status.
- * TODO: Add admin authorization before exposing this through production deployment.
- */
-function getAdminDashboardData() {
-  const trainings = readRows(SHEET_NAMES.TRAININGS);
-  const targets = readRows(SHEET_NAMES.TARGETS);
-  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
-  const signatures = readRows(SHEET_NAMES.SIGNATURES);
-  const finalRosters = readRows(SHEET_NAMES.FINAL_ROSTER);
-
-  const summary = trainings.map(function (training) {
-    const trainingId = training[TRAINING_COLUMNS.TRAINING_ID] || "";
+function buildMyTrainingStatus_(staff) {
+  var staffId = text_(staff[STAFF.ID]);
+  var targets = readTable(SHEETS.TARGETS, [TARGET.TRAINING_ID, TARGET.STAFF_ID]).filter(function (row) {
+    return text_(row[TARGET.STAFF_ID]) === staffId && isTargetRow_(row);
+  });
+  var trainings = readTable(SHEETS.TRAININGS, [TRAINING.ID, TRAINING.TITLE]);
+  var attendances = readTableOptional_(SHEETS.ATTENDANCE);
+  var signatures = readTableOptional_(SHEETS.SIGNATURES);
+  var certificates = readTableOptional_(SHEETS.CERTIFICATES);
+  var items = targets.map(function (target) {
+    var training = findInRows_(trainings, TRAINING.ID, target[TARGET.TRAINING_ID]);
+    if (!training) return null;
+    var normalized = normalizeTraining_(training);
+    var attendance = findInRows2_(attendances, ATTENDANCE.TRAINING_ID, normalized.trainingId, ATTENDANCE.STAFF_ID, staffId);
+    var signatureRequired = normalized.signatureRequired && !normalizeBoolean(target[TARGET.SIGNATURE_EXCLUDED]);
+    var signature = findInRows2_(signatures, SIGNATURE.TRAINING_ID, normalized.trainingId, SIGNATURE.STAFF_ID, staffId);
+    var certificate = findCertificate_(normalized.trainingId, staffId, certificates);
+    var final = completionStatus_({
+      attendanceCompleted: !normalized.qrEnabled || Boolean(attendance),
+      signatureRequired: signatureRequired,
+      signatureCompleted: Boolean(signature),
+      certificateRequired: normalized.certificateRequired,
+      certificateSubmitted: Boolean(certificate),
+      certificateApproved: certificate ? isApprovedCertificate_(certificate) : false
+    });
     return {
+      trainingId: normalized.trainingId,
+      title: normalized.title,
+      date: normalized.date,
+      time: normalized.time,
+      place: normalized.place,
+      department: normalized.department,
+      required: normalizeBoolean(target[TARGET.REQUIRED]),
+      attendanceRequired: normalized.qrEnabled,
+      attendanceCompleted: Boolean(attendance),
+      signatureRequired: signatureRequired,
+      signatureCompleted: signatureRequired ? Boolean(signature) : false,
+      certificateRequired: normalized.certificateRequired,
+      certificateSubmitted: Boolean(certificate),
+      certificateApproved: certificate ? isApprovedCertificate_(certificate) : false,
+      finalStatus: final.label,
+      statusGroup: final.group,
+      attendedAt: attendance ? normalizeDateTime_(attendance[ATTENDANCE.ATTENDED_AT]) : "",
+      signedAt: signature ? normalizeDateTime_(signature[SIGNATURE.SIGNED_AT]) : "",
+      certificateSubmittedAt: certificate ? normalizeDateTime_(certificate[CERTIFICATE.SUBMITTED_AT]) : ""
+    };
+  }).filter(Boolean).sort(function (a, b) {
+    return statusPriority_(a.statusGroup) - statusPriority_(b.statusGroup) || String(a.date).localeCompare(String(b.date));
+  });
+  return successResponse({
+    staff: publicStaff_(staff),
+    summary: {
+      total: items.length,
+      completed: items.filter(function (item) { return item.statusGroup === "completed"; }).length,
+      certificateSubmitted: items.filter(function (item) { return item.certificateRequired && item.certificateSubmitted; }).length,
+      certificateMissing: items.filter(function (item) { return item.certificateRequired && !item.certificateSubmitted; }).length,
+      incomplete: items.filter(function (item) { return item.statusGroup === "incomplete"; }).length,
+      review: items.filter(function (item) { return item.statusGroup === "review"; }).length
+    },
+    items: items
+  });
+}
+
+function buildFinalAttendance_(trainingId, writeRows) {
+  trainingId = requireText_(trainingId, "교육ID가 필요합니다.", "MISSING_TRAINING_ID");
+  var status = JSON.parse(getTrainingAttendanceStatus({ trainingId: trainingId }).getContent());
+  if (!status.ok) return jsonOutput_(status);
+  var training = status.data.training;
+  var signatures = readTableOptional_(SHEETS.SIGNATURES);
+  var rows = status.data.items.map(function (item, index) {
+    var signature = findInRows2_(signatures, SIGNATURE.TRAINING_ID, trainingId, SIGNATURE.STAFF_ID, item.staffId);
+    var completion = item.statusGroup === "completed" ? "이수완료" : item.statusGroup === "signature" ? "서명필요" : "미이수";
+    return {
+      sequence: index + 1,
       trainingId: trainingId,
-      title: training[TRAINING_COLUMNS.TITLE] || "",
-      targetCount: countRows_(targets, TARGET_COLUMNS.TRAINING_ID, trainingId),
-      attendanceCount: countRows_(attendances, ATTENDANCE_COLUMNS.TRAINING_ID, trainingId),
-      signatureCount: countRows_(signatures, SIGNATURE_COLUMNS.TRAINING_ID, trainingId),
-      finalRosterCreated: Boolean(findInRows_(finalRosters, "교육ID", trainingId))
+      trainingTitle: training.title,
+      trainingDate: training.date,
+      staffId: item.staffId,
+      name: item.name,
+      department: item.department,
+      position: item.position,
+      attendedAt: item.attendedAt,
+      signatureStatus: item.signatureRequired ? (item.signatureCompleted ? "완료" : "필요") : "불필요",
+      signatureFileUrl: signature ? text_(signature[SIGNATURE.FILE_URL]) : "",
+      completionStatus: completion,
+      note: ""
     };
   });
-
-  return jsonResponse({ trainings: summary });
-}
-
-/**
- * Return JSON response.
- *
- * Input: any serializable data
- * Output: ContentService JSON response
- */
-function jsonResponse(data) {
-  const payload = Object.prototype.hasOwnProperty.call(data || {}, "ok")
-    ? data
-    : { ok: true, data: data };
-
-  if (payload.ok === false && payload.error && !payload.code) {
-    payload.code = payload.error;
+  if (writeRows) {
+    rows.forEach(function (item) {
+      var row = {};
+      row[FINAL.SEQUENCE] = item.sequence;
+      row[FINAL.TRAINING_ID] = item.trainingId;
+      row[FINAL.TRAINING_TITLE] = item.trainingTitle;
+      row[FINAL.TRAINING_DATE] = item.trainingDate;
+      row[FINAL.STAFF_NAME] = item.name;
+      row[FINAL.DEPARTMENT] = item.department;
+      row[FINAL.POSITION] = item.position;
+      row[FINAL.ATTENDED_AT] = item.attendedAt;
+      row[FINAL.SIGNATURE_STATUS] = item.signatureStatus;
+      row[FINAL.SIGNATURE_FILE_URL] = item.signatureFileUrl;
+      row[FINAL.COMPLETION_STATUS] = item.completionStatus;
+      row[FINAL.NOTE] = item.note;
+      appendRowByHeader(SHEETS.FINAL_ROSTER, row);
+    });
   }
-
-  return jsonOutput_(payload);
-}
-
-function successResponse(data) {
-  return jsonOutput_({
-    ok: true,
-    data: data
+  return successResponse({
+    training: training,
+    summary: {
+      targetCount: rows.length,
+      completed: rows.filter(function (row) { return row.completionStatus === "이수완료"; }).length,
+      signatureRequired: rows.filter(function (row) { return row.completionStatus === "서명필요"; }).length,
+      incomplete: rows.filter(function (row) { return row.completionStatus === "미이수"; }).length
+    },
+    rows: rows,
+    status: writeRows ? "generated" : "preview",
+    generatedAt: writeRows ? normalizeDateTime_(new Date()) : "",
+    writtenCount: writeRows ? rows.length : 0
   });
 }
 
-function jsonOutput_(payload) {
-  return ContentService
-    .createTextOutput(JSON.stringify(payload))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * Return error response.
- *
- * Input: message, code, optional extra data
- * Output: ContentService JSON error response
- */
-function errorResponse(message, code, extra) {
-  return jsonOutput_({
-    ok: false,
-    code: code || "ERROR",
-    error: code || "ERROR",
-    message: message || "요청을 처리하지 못했습니다.",
-    data: extra || null
-  });
-}
-
-function createAppError_(message, code) {
-  const error = new Error(message || "요청을 처리하지 못했습니다.");
-  error.code = code || "ERROR";
-  return error;
-}
-
-function errorMessage_(error) {
-  return error && error.message ? error.message : "요청을 처리하지 못했습니다.";
-}
-
-function errorCode_(error) {
-  return error && error.code ? error.code : "REQUEST_FAILED";
-}
-
-/**
- * Get a sheet by name from the bound spreadsheet.
- *
- * Input: sheet name
- * Output: Google Apps Script Sheet object
- */
 function getSheetByName(name) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
   if (!sheet) {
-    throw createAppError_("필수 시트 `" + name + "`을 찾을 수 없습니다. 허브 시트 구성을 확인해 주세요.", "SHEET_NOT_FOUND");
+    throw appError_("필수 시트 `" + name + "`을 찾을 수 없습니다.", "SHEET_NOT_FOUND");
   }
   return sheet;
 }
 
 function findHeaderRow(sheet, requiredColumns) {
-  const values = sheet.getDataRange().getValues();
-  const headerRowIndex = findHeaderRowIndex_(values, requiredColumns || []);
-
-  if (headerRowIndex === -1) {
-    throw createAppError_(
-      "`" + sheet.getName() + "` 시트에서 필수 헤더를 찾을 수 없습니다: " + (requiredColumns || []).join(", "),
-      "HEADER_ROW_NOT_FOUND"
-    );
+  var values = sheet.getDataRange().getValues();
+  var required = requiredColumns || [];
+  for (var rowIndex = 0; rowIndex < Math.min(values.length, 30); rowIndex += 1) {
+    var headers = values[rowIndex].map(function (cell) { return text_(cell); });
+    var ok = required.every(function (column) {
+      return headers.some(function (header) { return sameHeader_(header, column); });
+    });
+    if (ok) return { index: rowIndex, headers: headers, values: values };
   }
-
-  return {
-    index: headerRowIndex,
-    headers: values[headerRowIndex].map(function (header) {
-      return String(header || "").trim();
-    }),
-    values: values
-  };
-}
-
-/**
- * Read rows from a sheet as objects keyed by header names.
- *
- * Input: sheet name
- * Output: object array
- */
-function readRows(sheetName) {
-  return readTable(sheetName, getRequiredHeadersForSheet_(sheetName));
+  throw appError_("`" + sheet.getName() + "` 시트의 헤더 행을 찾을 수 없습니다.", "HEADER_ROW_NOT_FOUND");
 }
 
 function readTable(sheetName, requiredColumns) {
-  const sheet = getSheetByName(sheetName);
-  const table = findHeaderRow(sheet, requiredColumns || []);
-  const headers = table.headers;
-  const missingColumns = (requiredColumns || []).filter(function (column) {
-    return !headers.some(function (header) {
-      return headerMatchesColumn_(header, column);
-    });
+  var sheet = getSheetByName(sheetName);
+  var table = findHeaderRow(sheet, requiredColumns || []);
+  var missing = (requiredColumns || []).filter(function (column) {
+    return !table.headers.some(function (header) { return sameHeader_(header, column); });
   });
-
-  if (missingColumns.length) {
-    throw createAppError_(
-      "`" + sheetName + "` 시트에 필수 컬럼이 없습니다: " + missingColumns.join(", "),
-      "REQUIRED_COLUMNS_MISSING"
-    );
+  if (missing.length) {
+    throw appError_("`" + sheetName + "` 시트에 필수 컬럼이 없습니다: " + missing.join(", "), "REQUIRED_COLUMNS_MISSING");
   }
-
-  return table.values.slice(table.index + 1)
-    .filter(function (row) {
-      return row.some(function (cell) {
-        return cell !== "";
-      });
-    })
-    .map(function (row) {
-      const item = {};
-      headers.forEach(function (header, index) {
-        if (header) {
-          item[String(header)] = row[index];
-        }
-      });
-      return normalizeRow(item);
-    })
-    .filter(function (row) {
-      return !isExampleRow_(sheetName, row);
+  return table.values.slice(table.index + 1).filter(function (row) {
+    return row.some(function (cell) { return cell !== ""; });
+  }).map(function (row) {
+    var item = {};
+    table.headers.forEach(function (header, index) {
+      if (header) item[canonicalHeader_(header)] = normalizeCell_(row[index]);
     });
+    return item;
+  }).filter(function (row) {
+    return !isExampleRow_(row);
+  });
 }
 
-/**
- * Append an object row to a sheet according to the header row.
- *
- * Input: sheet name, row object
- * Output: appended row number
- */
-function appendRow(sheetName, row) {
-  const sheet = getSheetByName(sheetName);
-  const table = findHeaderRow(sheet, getRequiredHeadersForSheet_(sheetName));
-  const headers = table.headers;
-  const rowValues = headers.map(function (header) {
-    return getRowValueForHeader_(row, header);
-  });
+function readTableOptional_(sheetName) {
+  try {
+    return readTable(sheetName, []);
+  } catch (error) {
+    return [];
+  }
+}
 
-  sheet.appendRow(rowValues);
+function appendRowByHeader(sheetName, rowObject) {
+  var sheet = getSheetByName(sheetName);
+  var table = findHeaderRow(sheet, requiredHeaders_(sheetName));
+  var row = table.headers.map(function (header) {
+    return valueForHeader_(rowObject, header);
+  });
+  sheet.appendRow(row);
   return sheet.getLastRow();
 }
 
-/**
- * Find the first row where columnName equals value.
- *
- * Input: sheet name, column name, value
- * Output: row object or null
- */
-function findByColumn(sheetName, columnName, value) {
-  const rows = readRows(sheetName);
-  return findInRows_(rows, columnName, value);
+function successResponse(data) {
+  return jsonOutput_({ ok: true, data: data });
 }
 
-/**
- * Build a header-to-index map from a Sheet.
- *
- * Input: Sheet object
- * Output: { [headerName]: zeroBasedIndex }
- */
-function getHeaderMap(sheet, requiredColumns) {
-  const values = sheet.getDataRange().getValues();
-  const headerRowIndex = findHeaderRowIndex_(values, requiredColumns || getRequiredHeadersForSheet_(sheet.getName()));
-  const headers = values[headerRowIndex] || [];
-  const map = {};
-
-  headers.forEach(function (header, index) {
-    if (header) {
-      map[canonicalHeader_(header)] = index;
-    }
-  });
-
-  return map;
+function errorResponse(message, code) {
+  return jsonOutput_({ ok: false, message: message, code: code || "ERROR" });
 }
 
-function getRequiredHeadersForSheet_(sheetName) {
-  if (sheetName === SHEET_NAMES.CONFIG) {
-    return [
-      "설정키",
-      "설정값"
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.TRAININGS) {
-    return [
-      TRAINING_COLUMNS.TRAINING_ID,
-      TRAINING_COLUMNS.TITLE,
-      TRAINING_COLUMNS.ACTIVE_STATUS
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.STAFF) {
-    return [
-      STAFF_COLUMNS.STAFF_ID,
-      STAFF_COLUMNS.NAME,
-      STAFF_COLUMNS.AUTH_CODE
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.TARGETS) {
-    return [
-      TARGET_COLUMNS.TRAINING_ID,
-      TARGET_COLUMNS.STAFF_ID,
-      TARGET_COLUMNS.IS_TARGET
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.ATTENDANCE) {
-    return [
-      ATTENDANCE_COLUMNS.ATTENDANCE_ID,
-      ATTENDANCE_COLUMNS.TRAINING_ID,
-      ATTENDANCE_COLUMNS.STAFF_ID
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.SIGNATURES) {
-    return [
-      SIGNATURE_COLUMNS.SIGNATURE_ID,
-      SIGNATURE_COLUMNS.TRAINING_ID,
-      SIGNATURE_COLUMNS.STAFF_ID
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.CERTIFICATES) {
-    return [
-      CERTIFICATE_COLUMNS.TRAINING_ID,
-      CERTIFICATE_COLUMNS.STAFF_ID
-    ];
-  }
-
-  if (sheetName === SHEET_NAMES.FINAL_ROSTER) {
-    return [
-      FINAL_SHEET_COLUMNS.SEQUENCE,
-      FINAL_SHEET_COLUMNS.TRAINING_ID,
-      FINAL_SHEET_COLUMNS.STAFF_NAME
-    ];
-  }
-
-  return [];
+function jsonOutput_(payload) {
+  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function findHeaderRowIndex_(values, requiredHeaders) {
-  const required = requiredHeaders || [];
-  const maxScanRows = Math.min(values.length, 20);
-
-  if (!required.length) {
-    return values.length ? 0 : -1;
-  }
-
-  for (let rowIndex = 0; rowIndex < maxScanRows; rowIndex += 1) {
-    const normalizedHeaders = values[rowIndex].map(function (cell) {
-      return normalizeHeader_(cell);
-    });
-    const hasRequiredHeaders = required.every(function (header) {
-      return normalizedHeaders.some(function (normalizedHeader) {
-        return headerMatchesColumn_(normalizedHeader, header);
-      });
-    });
-
-    if (hasRequiredHeaders) {
-      return rowIndex;
-    }
-  }
-
-  return -1;
+function normalizeBoolean(value) {
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  var normalized = String(value).trim().toLowerCase();
+  return ["y", "yes", "true", "1", "사용", "사용함", "활성", "대상", "필수", "필요", "재직", "완료", "제출", "승인"].indexOf(normalized) !== -1;
 }
 
-function findFirstHeaderIndex_(headers, candidates) {
-  const normalizedHeaders = headers.map(function (header) {
-    return normalizeHeader_(header);
-  });
+function normalizeDate(value) {
+  return normalizeDate_(value);
+}
 
-  for (let index = 0; index < candidates.length; index += 1) {
-    for (let headerIndex = 0; headerIndex < normalizedHeaders.length; headerIndex += 1) {
-      if (headerMatchesColumn_(normalizedHeaders[headerIndex], candidates[index])) {
-        return headerIndex;
-      }
-    }
+function normalizeTime(value) {
+  return normalizeTime_(value);
+}
+
+function normalizeDate_(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd");
   }
-
-  return -1;
+  return String(value).trim();
 }
 
-function normalizeHeader_(value) {
-  return String(value || "").trim();
+function normalizeTime_(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "HH:mm");
+  }
+  return String(value).trim();
 }
 
-function columnAliases_() {
-  const aliases = {};
+function normalizeDateTime_(value) {
+  if (!value) return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+  }
+  return String(value).trim();
+}
 
-  aliases["설정키"] = ["설정 Key", "설정명", "항목", "key", "Key"];
-  aliases["설정값"] = ["값", "value", "Value"];
-
-  aliases[TRAINING_COLUMNS.TRAINING_ID] = ["교육 ID", "연수ID", "연수 ID", "trainingId"];
-  aliases[TRAINING_COLUMNS.TITLE] = ["교육명", "연수명", "title"];
-  aliases[TRAINING_COLUMNS.DATE] = ["교육일", "연수일자", "date"];
-  aliases[TRAINING_COLUMNS.TIME] = ["교육 시간", "연수시간", "time"];
-  aliases[TRAINING_COLUMNS.LOCATION] = ["장소", "교육장소", "place", "location"];
-  aliases[TRAINING_COLUMNS.DEPARTMENT] = ["담당 부서", "담당부서", "부서", "department"];
-  aliases[TRAINING_COLUMNS.QR_ENABLED] = ["QR 사용 여부", "QR사용", "qrEnabled"];
-  aliases[TRAINING_COLUMNS.SIGNATURE_REQUIRED] = ["전자서명 필요 여부", "서명필요여부", "signatureRequired"];
-  aliases[TRAINING_COLUMNS.CERTIFICATE_REQUIRED] = ["이수증 제출 필요 여부", "이수증필요여부", "certificateRequired"];
-  aliases[TRAINING_COLUMNS.ACTIVE_STATUS] = ["활성 상태", "상태", "status", "activeStatus"];
-
-  aliases[STAFF_COLUMNS.STAFF_ID] = ["교직원 ID", "직원ID", "staffId"];
-  aliases[STAFF_COLUMNS.NAME] = ["이름", "교직원명", "name"];
-  aliases[STAFF_COLUMNS.DEPARTMENT] = ["소속부서", "소속", "부서명", "department"];
-  aliases[STAFF_COLUMNS.POSITION] = ["직급", "직책", "position"];
-  aliases[STAFF_COLUMNS.AUTH_CODE] = ["인증 코드", "본인인증코드", "authCode"];
-  aliases[STAFF_COLUMNS.EMPLOYMENT_STATUS] = ["재직 상태", "근무상태", "employmentStatus"];
-  aliases[STAFF_COLUMNS.ROLE] = ["역할", "role"];
-
-  aliases[TARGET_COLUMNS.IS_TARGET] = ["대상 여부", "대상", "isTarget"];
-  aliases[TARGET_COLUMNS.REQUIRED] = ["필수 여부", "필수", "required"];
-  aliases[TARGET_COLUMNS.SIGNATURE_EXCLUDED] = ["서명 제외 여부", "서명제외", "signatureExcluded"];
-
-  aliases[CERTIFICATE_COLUMNS.FILE_URL] = ["이수증파일URL", "파일 URL", "fileUrl"];
-  aliases[CERTIFICATE_COLUMNS.SUBMIT_STATUS] = ["처리상태", "상태", "submitStatus"];
-  aliases[CERTIFICATE_COLUMNS.APPROVAL_STATUS] = ["승인 상태", "확인상태", "approvalStatus"];
-  aliases[CERTIFICATE_COLUMNS.COMPLETED_DATE] = ["이수 일자", "수료일자", "completedDate"];
-  aliases[CERTIFICATE_COLUMNS.ISSUER] = ["기관", "교육기관", "issuer"];
-
+function aliases_() {
+  var aliases = {};
+  aliases[CONFIG.KEY] = ["설정항목", "항목", "key", "Key"];
+  aliases[CONFIG.VALUE] = ["값", "value", "Value"];
+  aliases[TRAINING.PLACE] = ["교육장소", "장소", "location", "place"];
+  aliases[TRAINING.QR_ENABLED] = ["QR 사용 여부", "QR사용", "qrEnabled"];
+  aliases[TRAINING.SIGNATURE_REQUIRED] = ["전자서명 필요 여부", "서명필요여부", "signatureRequired"];
+  aliases[TRAINING.CERTIFICATE_REQUIRED] = ["이수증 제출 필요 여부", "이수증필요여부", "certificateRequired"];
+  aliases[TRAINING.STATUS] = ["상태", "활성", "activeStatus", "status"];
+  aliases[STAFF.ID] = ["교직원ID", "직원ID", "staffId"];
+  aliases[STAFF.DEPARTMENT] = ["소속부서", "담당부서", "department"];
+  aliases[STAFF.STATUS] = ["상태", "재직상태", "employmentStatus"];
+  aliases[TARGET.IS_TARGET] = ["대상", "대상여부", "isTarget"];
+  aliases[TARGET.REQUIRED] = ["필수", "필수여부", "required"];
+  aliases[TARGET.SIGNATURE_EXCLUDED] = ["서명제외", "서명제외여부", "signatureExcluded"];
+  aliases[CERTIFICATE.ID] = ["이수증ID", "제출ID", "certificateId", "submissionId"];
+  aliases[CERTIFICATE.STATUS] = ["제출상태", "승인상태", "처리상태", "status"];
+  aliases[CERTIFICATE.FILE_ID] = ["파일ID", "이수증파일ID", "certificateFileId"];
+  aliases[FINAL.SIGNATURE_FILE_URL] = ["서명파일URL", "전자서명파일URL"];
   return aliases;
 }
 
-function getHeaderAliases_(columnName) {
-  return columnAliases_()[columnName] || [];
-}
-
-function headerMatchesColumn_(header, columnName) {
-  const normalizedHeader = normalizeHeader_(header);
-  const candidates = [columnName].concat(getHeaderAliases_(columnName)).map(normalizeHeader_);
-  return candidates.indexOf(normalizedHeader) !== -1;
+function sameHeader_(a, b) {
+  var left = normalizeHeader_(a);
+  var right = normalizeHeader_(b);
+  if (left === right) return true;
+  return (aliases_()[b] || []).map(normalizeHeader_).indexOf(left) !== -1 ||
+    (aliases_()[a] || []).map(normalizeHeader_).indexOf(right) !== -1;
 }
 
 function canonicalHeader_(header) {
-  const normalizedHeader = normalizeHeader_(header);
-  const aliases = columnAliases_();
-  const canonicalColumns = Object.keys(aliases);
-
-  for (let index = 0; index < canonicalColumns.length; index += 1) {
-    const columnName = canonicalColumns[index];
-    if (headerMatchesColumn_(normalizedHeader, columnName)) {
-      return columnName;
-    }
+  var normalized = normalizeHeader_(header);
+  var aliases = aliases_();
+  var keys = Object.keys(aliases);
+  for (var i = 0; i < keys.length; i += 1) {
+    if (sameHeader_(normalized, keys[i])) return keys[i];
   }
-
-  return normalizedHeader;
+  return text_(header);
 }
 
-function getRowValueForHeader_(row, header) {
-  const normalizedHeader = normalizeHeader_(header);
-  const canonical = canonicalHeader_(normalizedHeader);
-
-  if (row[normalizedHeader] !== undefined) {
-    return row[normalizedHeader];
-  }
-
-  if (row[canonical] !== undefined) {
-    return row[canonical];
-  }
-
-  const aliases = getHeaderAliases_(canonical);
-  for (let index = 0; index < aliases.length; index += 1) {
-    if (row[aliases[index]] !== undefined) {
-      return row[aliases[index]];
-    }
-  }
-
-  return "";
+function normalizeHeader_(value) {
+  return String(value || "").replace(/\s+/g, "").trim();
 }
 
 function normalizeCell_(value) {
   return typeof value === "string" ? value.trim() : value;
 }
 
-function normalizeRow(row) {
-  const normalized = {};
-
-  Object.keys(row || {}).forEach(function (key) {
-    normalized[canonicalHeader_(key)] = normalizeCell_(row[key]);
-  });
-
-  return normalized;
+function requiredHeaders_(sheetName) {
+  if (sheetName === SHEETS.CONFIG) return [CONFIG.KEY, CONFIG.VALUE];
+  if (sheetName === SHEETS.TRAININGS) return [TRAINING.ID, TRAINING.TITLE, TRAINING.STATUS];
+  if (sheetName === SHEETS.STAFF) return [STAFF.ID, STAFF.NAME];
+  if (sheetName === SHEETS.TARGETS) return [TARGET.TRAINING_ID, TARGET.STAFF_ID];
+  if (sheetName === SHEETS.ATTENDANCE) return [ATTENDANCE.ID, ATTENDANCE.TRAINING_ID, ATTENDANCE.STAFF_ID];
+  if (sheetName === SHEETS.SIGNATURES) return [SIGNATURE.ID, SIGNATURE.TRAINING_ID, SIGNATURE.STAFF_ID];
+  if (sheetName === SHEETS.CERTIFICATES) return [CERTIFICATE.TRAINING_ID, CERTIFICATE.STAFF_ID];
+  if (sheetName === SHEETS.FINAL_ROSTER) return [FINAL.SEQUENCE, FINAL.TRAINING_ID, FINAL.STAFF_NAME];
+  return [];
 }
 
-function isExampleRow_(sheetName, row) {
-  if (sheetName === SHEET_NAMES.CONFIG) {
-    return false;
+function valueForHeader_(rowObject, header) {
+  var canonical = canonicalHeader_(header);
+  if (rowObject[header] !== undefined) return rowObject[header];
+  if (rowObject[canonical] !== undefined) return rowObject[canonical];
+  var alias = aliases_()[canonical] || [];
+  for (var i = 0; i < alias.length; i += 1) {
+    if (rowObject[alias[i]] !== undefined) return rowObject[alias[i]];
   }
-
-  const values = Object.keys(row || {}).map(function (key) {
-    return String(row[key] || "").trim();
-  }).filter(Boolean);
-
-  if (!values.length) {
-    return false;
-  }
-
-  const joined = values.join(" ");
-  const hasExampleMarker = /예시|샘플|sample|YOUR_|YOUR DEPLOYMENT ID|테스트용/i.test(joined);
-  const hasRealLikeId = values.some(function (value) {
-    return /^(TRN|STF|ATT|SIG|CERT|FINAL)-/i.test(value);
-  });
-
-  return hasExampleMarker && !hasRealLikeId;
-}
-
-function normalizeBoolean(value) {
-  if (value === true) {
-    return true;
-  }
-
-  if (value === false || value === null || value === undefined) {
-    return false;
-  }
-
-  const normalized = String(value || "").trim().toLowerCase();
-  return [
-    "true",
-    "y",
-    "yes",
-    "1",
-    "사용",
-    "사용함",
-    "활성",
-    "대상",
-    "필수",
-    "필요",
-    "재직",
-    "완료",
-    "제출",
-    "제출완료"
-  ].indexOf(normalized) !== -1;
-}
-
-function isTruthy(value) {
-  return normalizeBoolean(value);
-}
-
-function isActiveTrainingStatus(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "활성" || normalized === "active" || normalizeBoolean(value);
-}
-
-function normalizeTrainingRow_(row) {
-  const place = row[TRAINING_COLUMNS.LOCATION] || "";
-  const status = String(row[TRAINING_COLUMNS.ACTIVE_STATUS] || "").trim();
-
-  return {
-    trainingId: row[TRAINING_COLUMNS.TRAINING_ID] || "",
-    title: row[TRAINING_COLUMNS.TITLE] || "",
-    date: serializeDate_(row[TRAINING_COLUMNS.DATE]),
-    time: serializeTime_(row[TRAINING_COLUMNS.TIME]),
-    place: place,
-    location: place,
-    department: row[TRAINING_COLUMNS.DEPARTMENT] || "",
-    category: row[TRAINING_COLUMNS.CATEGORY] || "",
-    qrEnabled: isTruthy(row[TRAINING_COLUMNS.QR_ENABLED]),
-    signatureRequired: isTruthy(row[TRAINING_COLUMNS.SIGNATURE_REQUIRED]),
-    certificateRequired: isTruthy(row[TRAINING_COLUMNS.CERTIFICATE_REQUIRED]),
-    status: status,
-    activeStatus: status,
-    note: row[TRAINING_COLUMNS.NOTE] || ""
-  };
-}
-
-function normalizeStaffRow_(row) {
-  return {
-    staffId: row[STAFF_COLUMNS.STAFF_ID] || "",
-    name: row[STAFF_COLUMNS.NAME] || "",
-    department: row[STAFF_COLUMNS.DEPARTMENT] || "",
-    position: row[STAFF_COLUMNS.POSITION] || ""
-  };
-}
-
-function normalizeStaffAdminRow_(row) {
-  return {
-    staffId: row[STAFF_COLUMNS.STAFF_ID] || "",
-    name: row[STAFF_COLUMNS.NAME] || "",
-    department: row[STAFF_COLUMNS.DEPARTMENT] || "",
-    position: row[STAFF_COLUMNS.POSITION] || "",
-    authCode: row[STAFF_COLUMNS.AUTH_CODE] || "",
-    employmentStatus: row[STAFF_COLUMNS.EMPLOYMENT_STATUS] || "재직",
-    role: row[STAFF_COLUMNS.ROLE] || "교직원",
-    note: row[STAFF_COLUMNS.NOTE] || ""
-  };
-}
-
-function updateTrainingRow_(trainingId, updates) {
-  const sheet = getSheetByName(SHEET_NAMES.TRAININGS);
-  const values = sheet.getDataRange().getValues();
-  const headerRowIndex = findHeaderRowIndex_(values, getRequiredHeadersForSheet_(SHEET_NAMES.TRAININGS));
-  const headers = values[headerRowIndex] || [];
-  const trainingIdColumnIndex = findFirstHeaderIndex_(headers, [TRAINING_COLUMNS.TRAINING_ID]);
-
-  if (trainingIdColumnIndex === -1) {
-    return null;
-  }
-
-  for (let rowIndex = headerRowIndex + 1; rowIndex < values.length; rowIndex += 1) {
-    if (String(values[rowIndex][trainingIdColumnIndex] || "").trim() !== trainingId) {
-      continue;
-    }
-
-    Object.keys(updates).forEach(function (columnName) {
-      const columnIndex = findFirstHeaderIndex_(headers, [columnName]);
-      if (columnIndex !== -1) {
-        sheet.getRange(rowIndex + 1, columnIndex + 1).setValue(updates[columnName]);
-      }
-    });
-
-    const updatedRow = {};
-    headers.forEach(function (header, index) {
-      if (!header) {
-        return;
-      }
-
-      const headerName = String(header);
-      updatedRow[headerName] = updates[headerName] !== undefined ? updates[headerName] : values[rowIndex][index];
-    });
-
-    return normalizeTrainingRow_(updatedRow);
-  }
-
-  return null;
-}
-
-function updateStaffRow_(staffId, updates) {
-  const sheet = getSheetByName(SHEET_NAMES.STAFF);
-  const values = sheet.getDataRange().getValues();
-  const headerRowIndex = findHeaderRowIndex_(values, getRequiredHeadersForSheet_(SHEET_NAMES.STAFF));
-  const headers = values[headerRowIndex] || [];
-  const staffIdColumnIndex = findFirstHeaderIndex_(headers, [STAFF_COLUMNS.STAFF_ID]);
-
-  if (staffIdColumnIndex === -1) {
-    return null;
-  }
-
-  for (let rowIndex = headerRowIndex + 1; rowIndex < values.length; rowIndex += 1) {
-    if (String(values[rowIndex][staffIdColumnIndex] || "").trim() !== staffId) {
-      continue;
-    }
-
-    Object.keys(updates).forEach(function (columnName) {
-      const columnIndex = findFirstHeaderIndex_(headers, [columnName]);
-      if (columnIndex !== -1) {
-        sheet.getRange(rowIndex + 1, columnIndex + 1).setValue(updates[columnName]);
-      }
-    });
-
-    const updatedRow = {};
-    headers.forEach(function (header, index) {
-      if (!header) {
-        return;
-      }
-
-      const headerName = String(header);
-      updatedRow[headerName] = updates[headerName] !== undefined ? updates[headerName] : values[rowIndex][index];
-    });
-
-    return normalizeStaffAdminRow_(updatedRow);
-  }
-
-  return null;
-}
-
-function findAttendance_(trainingId, staffId) {
-  return readRows(SHEET_NAMES.ATTENDANCE).find(function (row) {
-    return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-      String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === String(staffId || "").trim();
-  }) || null;
-}
-
-function findSignature_(trainingId, staffId) {
-  return readRows(SHEET_NAMES.SIGNATURES).find(function (row) {
-    return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-      String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === String(staffId || "").trim();
-  }) || null;
-}
-
-function signatureDateValue_(dateValue) {
-  const dateText = normalizeDate(dateValue);
-  const timestamp = new Date(dateText).getTime();
-  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
-}
-
-function signatureTodayValue_() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today.getTime();
-}
-
-function compareDateForSignature_(dateA, dateB) {
-  const today = signatureTodayValue_();
-  const valueA = signatureDateValue_(dateA);
-  const valueB = signatureDateValue_(dateB);
-  const todayA = valueA === today ? 0 : 1;
-  const todayB = valueB === today ? 0 : 1;
-
-  if (todayA !== todayB) {
-    return todayA - todayB;
-  }
-
-  return valueA - valueB;
-}
-
-function compareSignatureRequiredItems_(a, b) {
-  const dateCompare = compareDateForSignature_(a.date, b.date);
-  if (dateCompare !== 0) {
-    return dateCompare;
-  }
-
-  if (a.selectable !== b.selectable) {
-    return a.selectable ? -1 : 1;
-  }
-
-  return String(a.time || "").localeCompare(String(b.time || ""));
-}
-
-function findCertificate_(certificates, trainingId, staffId) {
-  return certificates.find(function (row) {
-    return String(row[CERTIFICATE_COLUMNS.TRAINING_ID] || row["교육ID"] || "").trim() === String(trainingId || "").trim() &&
-      String(row[CERTIFICATE_COLUMNS.STAFF_ID] || row["교직원ID"] || "").trim() === String(staffId || "").trim();
-  }) || null;
-}
-
-function isApprovedCertificate_(certificate) {
-  const status = String(
-    certificate[CERTIFICATE_COLUMNS.APPROVAL_STATUS] ||
-      certificate[CERTIFICATE_COLUMNS.SUBMIT_STATUS] ||
-      certificate["처리상태"] ||
-      certificate["상태"] ||
-      ""
-  ).trim();
-
-  return ["승인", "승인완료", "확인완료", "완료"].indexOf(status) !== -1;
-}
-
-function calculateTrainingStatus_(state) {
-  if (!state.attendanceCompleted) {
-    return { label: "미이수", group: "incomplete" };
-  }
-
-  if (state.signatureRequired && !state.signatureCompleted) {
-    return { label: "미이수", group: "incomplete" };
-  }
-
-  if (state.certificateRequired) {
-    if (state.certificateApproved) {
-      return { label: "이수완료", group: "completed" };
-    }
-
-    if (state.certificateSubmitted) {
-      return { label: "확인필요", group: "review" };
-    }
-
-    return { label: "미이수", group: "incomplete" };
-  }
-
-  return { label: "이수완료", group: "completed" };
-}
-
-function statusPriority_(statusGroup) {
-  if (statusGroup === "incomplete") {
-    return 0;
-  }
-
-  if (statusGroup === "review") {
-    return 1;
-  }
-
-  return 2;
-}
-
-function calculateAttendanceAdminStatus_(state) {
-  if (!state.attendanceCompleted) {
-    return { label: "미출석", group: "absent" };
-  }
-
-  if (state.signatureRequired && !state.signatureCompleted) {
-    return { label: "서명 필요", group: "signature" };
-  }
-
-  return { label: "완료", group: "completed" };
-}
-
-function calculateFinalCompletionStatus_(state) {
-  if (!state.attendanceCompleted) {
-    return "미이수";
-  }
-
-  if (state.signatureRequired && !state.signatureCompleted) {
-    return "서명필요";
-  }
-
-  return "이수완료";
-}
-
-function buildFinalAttendanceRoster_(trainingId) {
-  const training = findByColumn(SHEET_NAMES.TRAININGS, TRAINING_COLUMNS.TRAINING_ID, trainingId);
-
-  if (!training) {
-    throw new Error("교육 정보를 찾을 수 없습니다.");
-  }
-
-  const normalizedTraining = normalizeTrainingRow_(training);
-  const targets = readRows(SHEET_NAMES.TARGETS).filter(function (row) {
-    return String(row[TARGET_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-      isTruthy(row[TARGET_COLUMNS.IS_TARGET]);
-  });
-  const staffRows = readRows(SHEET_NAMES.STAFF);
-  const attendances = readRows(SHEET_NAMES.ATTENDANCE);
-  const signatures = readRows(SHEET_NAMES.SIGNATURES);
-
-  const rows = targets.map(function (target, index) {
-    const staffId = String(target[TARGET_COLUMNS.STAFF_ID] || "").trim();
-    const staff = findInRows_(staffRows, STAFF_COLUMNS.STAFF_ID, staffId);
-    const attendance = attendances.find(function (row) {
-      return String(row[ATTENDANCE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-        String(row[ATTENDANCE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const signature = signatures.find(function (row) {
-      return String(row[SIGNATURE_COLUMNS.TRAINING_ID] || "").trim() === String(trainingId || "").trim() &&
-        String(row[SIGNATURE_COLUMNS.STAFF_ID] || "").trim() === staffId;
-    });
-    const signatureRequired = normalizedTraining.signatureRequired && !isTruthy(target[TARGET_COLUMNS.SIGNATURE_EXCLUDED]);
-    const attendanceCompleted = Boolean(attendance);
-    const signatureCompleted = Boolean(signature);
-    const completionStatus = calculateFinalCompletionStatus_({
-      attendanceCompleted: attendanceCompleted,
-      signatureRequired: signatureRequired,
-      signatureCompleted: signatureCompleted
-    });
-
-    return {
-      sequence: index + 1,
-      trainingId: trainingId,
-      trainingTitle: normalizedTraining.title,
-      trainingDate: normalizedTraining.date,
-      staffId: staffId,
-      name: staff ? staff[STAFF_COLUMNS.NAME] || "" : "",
-      department: staff ? staff[STAFF_COLUMNS.DEPARTMENT] || "" : "",
-      position: staff ? staff[STAFF_COLUMNS.POSITION] || "" : "",
-      attendedAt: attendance ? serializeDateTime_(attendance[ATTENDANCE_COLUMNS.ATTENDED_AT]) : "",
-      signatureStatus: signatureRequired ? (signatureCompleted ? "완료" : "필요") : "불필요",
-      signatureFileUrl: signature ? signature[SIGNATURE_COLUMNS.FILE_URL] || "" : "",
-      completionStatus: completionStatus,
-      note: ""
-    };
-  }).sort(function (a, b) {
-    return finalStatusPriority_(a.completionStatus) - finalStatusPriority_(b.completionStatus) ||
-      String(a.department || "").localeCompare(String(b.department || "")) ||
-      String(a.name || "").localeCompare(String(b.name || ""));
-  }).map(function (row, index) {
-    row.sequence = index + 1;
-    return row;
-  });
-
-  const summary = {
-    targetCount: rows.length,
-    completed: rows.filter(function (row) {
-      return row.completionStatus === "이수완료";
-    }).length,
-    signatureRequired: rows.filter(function (row) {
-      return row.completionStatus === "서명필요";
-    }).length,
-    incomplete: rows.filter(function (row) {
-      return row.completionStatus === "미이수";
-    }).length
-  };
-
-  return {
-    training: normalizedTraining,
-    summary: summary,
-    rows: rows
-  };
-}
-
-function finalStatusPriority_(status) {
-  if (status === "미이수") {
-    return 0;
-  }
-
-  if (status === "서명필요") {
-    return 1;
-  }
-
-  return 2;
-}
-
-function adminStatusPriority_(statusGroup) {
-  if (statusGroup === "absent") {
-    return 0;
-  }
-
-  if (statusGroup === "signature") {
-    return 1;
-  }
-
-  return 2;
-}
-
-function readRowsOptional_(sheetName) {
-  try {
-    return readRows(sheetName);
-  } catch (error) {
-    return [];
-  }
-}
-
-function findActiveStaffByNameDept_(nameValue, departmentValue) {
-  const name = nameValue ? String(nameValue).trim() : "";
-  const department = departmentValue ? String(departmentValue).trim() : "";
-
-  if (!name) {
-    return {
-      ok: false,
-      response: errorResponse("성명을 입력해 주세요.", "MISSING_STAFF_NAME")
-    };
-  }
-
-  const matchesByName = readRows(SHEET_NAMES.STAFF).filter(function (row) {
-    return isActiveStaff(row) && String(row[STAFF_COLUMNS.NAME] || "").trim() === name;
-  });
-
-  if (!matchesByName.length) {
-    return {
-      ok: false,
-      response: errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND")
-    };
-  }
-
-  const matches = department ? matchesByName.filter(function (row) {
-    return String(row[STAFF_COLUMNS.DEPARTMENT] || "").trim() === department;
-  }) : matchesByName;
-
-  if (!matches.length) {
-    return {
-      ok: false,
-      response: errorResponse("성명과 소속부서를 확인해 주세요.", "STAFF_NOT_FOUND")
-    };
-  }
-
-  if (matches.length > 1) {
-    return {
-      ok: false,
-      response: errorResponse("동명이인이 있습니다. 소속부서를 입력해 주세요.", "DUPLICATE_STAFF_NAME")
-    };
-  }
-
-  return {
-    ok: true,
-    staff: matches[0]
-  };
+  return "";
 }
 
 function getConfigMap_() {
-  const rows = readRows(SHEET_NAMES.CONFIG);
-  const config = {};
-
+  var rows = readTable(SHEETS.CONFIG, [CONFIG.KEY, CONFIG.VALUE]);
+  var config = {};
   rows.forEach(function (row) {
-    const key = row["설정키"] || row["항목"] || row["key"] || row["Key"] || "";
-    const value = row["설정값"] || row["값"] || row["value"] || row["Value"] || "";
-    if (key) {
-      config[String(key).trim()] = value;
-    }
+    var key = text_(row[CONFIG.KEY] || row.key || row.Key);
+    var value = row[CONFIG.VALUE] !== undefined ? row[CONFIG.VALUE] : row.value;
+    if (key) config[key] = value;
   });
-
   return config;
 }
 
-function getConfigValue_(config, keys) {
-  for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index];
-    if (config[key]) {
-      return config[key];
+function configValue_(config, keys) {
+  for (var i = 0; i < keys.length; i += 1) {
+    if (config[keys[i]] !== undefined && config[keys[i]] !== "") return config[keys[i]];
+  }
+  return "";
+}
+
+function publicSchoolConfig_(config) {
+  return {
+    schoolName: text_(configValue_(config, ["schoolName", "학교명"])),
+    centerName: text_(configValue_(config, ["centerName", "교육센터명", "센터명"])) || "학교 교직원 교육센터",
+    logoUrl: text_(configValue_(config, ["logoUrl", "schoolLogoUrl", "학교로고URL", "로고URL"])),
+    schoolLogoUrl: text_(configValue_(config, ["logoUrl", "schoolLogoUrl", "학교로고URL", "로고URL"])),
+    primaryColor: text_(configValue_(config, ["primaryColor", "메인컬러", "기본색상"])) || "#1F2A44",
+    secondaryColor: text_(configValue_(config, ["secondaryColor", "보조컬러", "보조색상"])) || "#EEF4FF",
+    ownerDepartment: text_(configValue_(config, ["ownerDepartment", "담당부서명", "담당부서"])),
+    ownerName: text_(configValue_(config, ["ownerName", "담당자명", "담당자"])),
+    ownerContact: text_(configValue_(config, ["ownerContact", "담당자연락처", "연락처"])),
+    departmentName: text_(configValue_(config, ["ownerDepartment", "담당부서명", "담당부서"])),
+    managerName: text_(configValue_(config, ["ownerName", "담당자명", "담당자"])),
+    managerContact: text_(configValue_(config, ["ownerContact", "담당자연락처", "연락처"])),
+    signatureFolderId: text_(configValue_(config, ["signatureFolderId", "전자서명 저장 폴더 ID", "전자서명저장폴더ID"])),
+    certificateFolderId: text_(configValue_(config, ["certificateFolderId", "이수증 저장 폴더 ID", "이수증저장폴더ID"])),
+    finalRosterFolderId: text_(configValue_(config, ["finalRosterFolderId", "최종 서명부 저장 폴더 ID", "최종서명부저장폴더ID"])),
+    activeSemester: text_(configValue_(config, ["activeSemester", "운영학기", "학기"])),
+    privacyNotice: text_(configValue_(config, ["privacyNotice", "개인정보 안내문", "개인정보안내문"]))
+  };
+}
+
+function normalizeTraining_(row) {
+  var place = text_(row[TRAINING.PLACE]);
+  var status = text_(row[TRAINING.STATUS]);
+  return {
+    trainingId: text_(row[TRAINING.ID]),
+    title: text_(row[TRAINING.TITLE]),
+    date: normalizeDate_(row[TRAINING.DATE]),
+    time: normalizeTime_(row[TRAINING.TIME]),
+    place: place,
+    location: place,
+    department: text_(row[TRAINING.DEPARTMENT]),
+    category: text_(row[TRAINING.CATEGORY]),
+    qrEnabled: normalizeBoolean(row[TRAINING.QR_ENABLED]),
+    signatureRequired: normalizeBoolean(row[TRAINING.SIGNATURE_REQUIRED]),
+    certificateRequired: normalizeBoolean(row[TRAINING.CERTIFICATE_REQUIRED]),
+    status: status,
+    activeStatus: status,
+    folderMode: text_(row[TRAINING.FOLDER_MODE]),
+    driveFolderId: text_(row[TRAINING.DRIVE_FOLDER_ID]),
+    signatureFolderId: text_(row[TRAINING.SIGNATURE_FOLDER_ID]),
+    certificateFolderId: text_(row[TRAINING.CERTIFICATE_FOLDER_ID]),
+    finalRosterFolderId: text_(row[TRAINING.FINAL_ROSTER_FOLDER_ID]),
+    note: text_(row[TRAINING.NOTE])
+  };
+}
+
+function publicStaff_(row) {
+  return {
+    staffId: text_(row[STAFF.ID]),
+    name: text_(row[STAFF.NAME]),
+    department: text_(row[STAFF.DEPARTMENT]),
+    position: text_(row[STAFF.POSITION])
+  };
+}
+
+function adminStaff_(row) {
+  return {
+    staffId: text_(row[STAFF.ID]),
+    name: text_(row[STAFF.NAME]),
+    department: text_(row[STAFF.DEPARTMENT]),
+    position: text_(row[STAFF.POSITION]),
+    authCode: "",
+    employmentStatus: text_(row[STAFF.STATUS]) || "재직",
+    role: text_(row[STAFF.ROLE]) || "교직원",
+    note: text_(row[STAFF.NOTE])
+  };
+}
+
+function findStaffByNameDept_(name, department) {
+  name = text_(name);
+  department = text_(department);
+  if (!name) return { ok: false, response: errorResponse("성명을 입력해 주세요.", "MISSING_STAFF_NAME") };
+  var matchesByName = readTable(SHEETS.STAFF, [STAFF.ID, STAFF.NAME]).filter(function (row) {
+    return isActiveStaff_(row) && text_(row[STAFF.NAME]) === name;
+  });
+  if (!matchesByName.length) return { ok: false, response: errorResponse("교직원 정보를 찾을 수 없습니다.", "STAFF_NOT_FOUND") };
+  var matches = department ? matchesByName.filter(function (row) { return text_(row[STAFF.DEPARTMENT]) === department; }) : matchesByName;
+  if (!matches.length) return { ok: false, response: errorResponse("성명과 소속부서를 확인해 주세요.", "STAFF_NOT_FOUND") };
+  if (matches.length > 1) return { ok: false, response: errorResponse("동명이인이 있습니다. 소속부서를 입력해 주세요.", "DUPLICATE_STAFF_NAME") };
+  return { ok: true, row: matches[0] };
+}
+
+function findTraining_(trainingId) {
+  return findByColumn_(SHEETS.TRAININGS, TRAINING.ID, trainingId);
+}
+
+function findTarget_(trainingId, staffId) {
+  return readTable(SHEETS.TARGETS, [TARGET.TRAINING_ID, TARGET.STAFF_ID]).filter(function (row) {
+    return text_(row[TARGET.TRAINING_ID]) === text_(trainingId) &&
+      text_(row[TARGET.STAFF_ID]) === text_(staffId) &&
+      isTargetRow_(row);
+  })[0] || null;
+}
+
+function findAttendance_(trainingId, staffId) {
+  return findInRows2_(readTableOptional_(SHEETS.ATTENDANCE), ATTENDANCE.TRAINING_ID, trainingId, ATTENDANCE.STAFF_ID, staffId);
+}
+
+function findSignature_(trainingId, staffId) {
+  return findInRows2_(readTableOptional_(SHEETS.SIGNATURES), SIGNATURE.TRAINING_ID, trainingId, SIGNATURE.STAFF_ID, staffId);
+}
+
+function findCertificate_(trainingId, staffId, certificates) {
+  return findInRows2_(certificates || readTableOptional_(SHEETS.CERTIFICATES), CERTIFICATE.TRAINING_ID, trainingId, CERTIFICATE.STAFF_ID, staffId);
+}
+
+function findByColumn_(sheetName, column, value) {
+  return findInRows_(readTable(sheetName, [column]), column, value);
+}
+
+function findInRows_(rows, column, value) {
+  var expected = text_(value);
+  return rows.filter(function (row) { return text_(row[column]) === expected; })[0] || null;
+}
+
+function findInRows2_(rows, columnA, valueA, columnB, valueB) {
+  var a = text_(valueA);
+  var b = text_(valueB);
+  return rows.filter(function (row) { return text_(row[columnA]) === a && text_(row[columnB]) === b; })[0] || null;
+}
+
+function updateRowByKey_(sheetName, keyColumn, keyValue, updates, normalizer) {
+  var sheet = getSheetByName(sheetName);
+  var table = findHeaderRow(sheet, [keyColumn]);
+  var keyIndex = headerIndex_(table.headers, keyColumn);
+  for (var rowIndex = table.index + 1; rowIndex < table.values.length; rowIndex += 1) {
+    if (text_(table.values[rowIndex][keyIndex]) !== text_(keyValue)) continue;
+    Object.keys(updates).forEach(function (column) {
+      var columnIndex = headerIndex_(table.headers, column);
+      if (columnIndex !== -1) sheet.getRange(rowIndex + 1, columnIndex + 1).setValue(updates[column]);
+    });
+    var updated = {};
+    table.headers.forEach(function (header, index) {
+      if (!header) return;
+      var canonical = canonicalHeader_(header);
+      updated[canonical] = updates[canonical] !== undefined ? updates[canonical] : table.values[rowIndex][index];
+    });
+    return normalizer ? normalizer(updated) : updated;
+  }
+  return null;
+}
+
+function headerIndex_(headers, column) {
+  for (var i = 0; i < headers.length; i += 1) {
+    if (sameHeader_(headers[i], column)) return i;
+  }
+  return -1;
+}
+
+function upsertConfigRows_(items) {
+  var sheet = getSheetByName(SHEETS.CONFIG);
+  var table = findHeaderRow(sheet, [CONFIG.KEY, CONFIG.VALUE]);
+  var keyIndex = headerIndex_(table.headers, CONFIG.KEY);
+  var valueIndex = headerIndex_(table.headers, CONFIG.VALUE);
+  items.forEach(function (item) {
+    for (var rowIndex = table.index + 1; rowIndex < table.values.length; rowIndex += 1) {
+      if (text_(table.values[rowIndex][keyIndex]) === item.key) {
+        sheet.getRange(rowIndex + 1, valueIndex + 1).setValue(item.value);
+        return;
+      }
     }
+    var row = {};
+    row[CONFIG.KEY] = item.key;
+    row[CONFIG.VALUE] = item.value;
+    appendRowByHeader(SHEETS.CONFIG, row);
+  });
+}
+
+function isActiveTraining_(row) {
+  return isActiveStatus_(row[TRAINING.STATUS]);
+}
+
+function isActiveStaff_(row) {
+  return isActiveStatus_(row[STAFF.STATUS] || "재직");
+}
+
+function isActiveStatus_(status) {
+  var normalized = text_(status).toLowerCase();
+  return !normalized || normalized === "활성" || normalized === "active" || normalized === "재직" || normalized === "y" || normalized === "사용";
+}
+
+function isTargetRow_(row) {
+  return row[TARGET.IS_TARGET] === undefined || row[TARGET.IS_TARGET] === "" || normalizeBoolean(row[TARGET.IS_TARGET]);
+}
+
+function isApprovedCertificate_(certificate) {
+  var status = text_(certificate[CERTIFICATE.STATUS]);
+  return ["승인", "승인완료", "확인완료", "완료"].indexOf(status) !== -1;
+}
+
+function completionStatus_(state) {
+  if (!state.attendanceCompleted) return { label: "미이수", group: "incomplete" };
+  if (state.signatureRequired && !state.signatureCompleted) return { label: "확인필요", group: "review" };
+  if (state.certificateRequired) {
+    if (state.certificateApproved) return { label: "이수완료", group: "completed" };
+    if (state.certificateSubmitted) return { label: "확인필요", group: "review" };
+    return { label: "확인필요", group: "review" };
   }
-
-  return "";
+  return { label: "이수완료", group: "completed" };
 }
 
-function getSignatureFolderId_() {
-  const config = getConfigMap_();
-  return String(
-    config.signatureFolderId ||
-      config["signatureFolderId"] ||
-      config[CONFIG_KEYS.SIGNATURE_FOLDER_ID] ||
-      config["전자서명저장폴더ID"] ||
-      ""
-  ).trim();
+function statusPriority_(group) {
+  if (group === "incomplete") return 0;
+  if (group === "review") return 1;
+  return 2;
 }
 
-function getCertificateFolderId_() {
-  const config = getConfigMap_();
-  return String(
-    config.certificateFolderId ||
-      config["certificateFolderId"] ||
-      config[CONFIG_KEYS.CERTIFICATE_FOLDER_ID] ||
-      config["이수증저장폴더ID"] ||
-      config["이수증 저장 폴더 ID"] ||
-      ""
-  ).trim();
+function groupByDate_(items) {
+  var grouped = {};
+  items.forEach(function (item) {
+    var date = item.date || "날짜 미입력";
+    if (!grouped[date]) grouped[date] = [];
+    grouped[date].push(item);
+  });
+  return Object.keys(grouped).sort().map(function (date) {
+    return { date: date, items: grouped[date] };
+  });
 }
 
-function signatureImageBlob_(signatureImageBase64, filename) {
-  const normalized = String(signatureImageBase64 || "").trim();
-  const base64 = normalized.indexOf(",") !== -1 ? normalized.split(",").pop() : normalized;
-  const bytes = Utilities.base64Decode(base64);
-  return Utilities.newBlob(bytes, "image/png", filename);
+function compareSignatureItems_(a, b) {
+  return String(a.date).localeCompare(String(b.date)) || String(a.time).localeCompare(String(b.time));
 }
 
-function certificateFileBlob_(fileBase64, mimeType, filename) {
-  const normalized = String(fileBase64 || "").trim();
-  const base64 = normalized.indexOf(",") !== -1 ? normalized.split(",").pop() : normalized;
-  const bytes = Utilities.base64Decode(base64);
-  return Utilities.newBlob(bytes, mimeType, filename);
+function signatureFolderId_(training) {
+  var config = getConfigMap_();
+  return text_(training.signatureFolderId || training.driveFolderId || configValue_(config, ["signatureFolderId", "전자서명 저장 폴더 ID", "전자서명저장폴더ID"]));
 }
 
-function normalizeCertificateMimeType_(fileName, mimeType) {
-  const normalizedMimeType = String(mimeType || "").trim();
-
-  if (normalizedMimeType) {
-    return normalizedMimeType;
-  }
-
-  const extension = String(fileName || "").split(".").pop().toLowerCase();
-
-  if (extension === "pdf") {
-    return "application/pdf";
-  }
-
-  if (extension === "jpg" || extension === "jpeg") {
-    return "image/jpeg";
-  }
-
-  if (extension === "png") {
-    return "image/png";
-  }
-
-  return "";
+function certificateFolderId_(training) {
+  var config = getConfigMap_();
+  return text_(training.certificateFolderId || training.driveFolderId || configValue_(config, ["certificateFolderId", "이수증 저장 폴더 ID", "이수증저장폴더ID"]));
 }
 
-function normalizeDate(value) {
-  if (!value) {
-    return "";
-  }
-
-  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  }
-
-  const text = String(value).trim();
-  const parsed = new Date(text);
-
-  if (/^\d{4}[./-]\d{1,2}[./-]\d{1,2}$/.test(text) && !Number.isNaN(parsed.getTime())) {
-    return Utilities.formatDate(parsed, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  }
-
-  return text;
+function base64Blob_(value, mimeType, fileName) {
+  var text = String(value || "").trim();
+  var base64 = text.indexOf(",") !== -1 ? text.split(",").pop() : text;
+  return Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
 }
 
-function normalizeTime(value) {
-  if (!value) {
-    return "";
-  }
-
-  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), "HH:mm");
-  }
-
-  return String(value).trim();
+function safeFileName_(name) {
+  return String(name || "file").replace(/[\\/:*?"<>|]/g, "_");
 }
 
-function serializeDate_(value) {
-  return normalizeDate(value);
+function mimeTypeFromName_(fileName) {
+  var ext = String(fileName || "").split(".").pop().toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  return "application/octet-stream";
 }
 
-function serializeTime_(value) {
-  return normalizeTime(value);
-}
-
-function serializeDateTime_(value) {
-  if (!value) {
-    return "";
-  }
-
-  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
-    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-  }
-
-  return String(value).trim();
-}
-
-function isActiveStaff(row) {
-  const status = String(row[STAFF_COLUMNS.EMPLOYMENT_STATUS] || "").trim();
-  return !status || status === "재직" || status.toLowerCase() === "active";
-}
-
-function isActiveStaffStatus_(status) {
-  const normalized = String(status || "").trim();
-  return !normalized || normalized === "재직" || normalized.toLowerCase() === "active";
-}
-
-function isManagerRole_(role) {
-  return ["관리자", "담당자"].indexOf(String(role || "").trim()) !== -1;
-}
-
-function createAuthCode_() {
-  return Utilities.getUuid().replace(/-/g, "").slice(0, 6).toUpperCase();
-}
-
-function createId_(prefix) {
-  return prefix + "-" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") + "-" + Utilities.getUuid().slice(0, 8);
-}
-
-function toYn_(value) {
-  return isTruthy(value) ? "Y" : "N";
-}
-
-function trainingYear_() {
-  const config = getConfigMap_();
-  const semester = String(getConfigValue_(config, ["activeSemester", CONFIG_KEYS.ACTIVE_SEMESTER]) || "").trim();
-  const match = semester.match(/20\d{2}/);
-
-  if (match) {
-    return match[0];
-  }
-
-  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy");
+function normalizeIdList_(value) {
+  var list = Array.isArray(value) ? value : [value];
+  var seen = {};
+  return list.map(text_).filter(Boolean).filter(function (item) {
+    if (seen[item]) return false;
+    seen[item] = true;
+    return true;
+  });
 }
 
 function generateTrainingId_() {
-  const year = trainingYear_();
-  const rows = readRows(SHEET_NAMES.TRAININGS);
-  let maxSequence = 0;
-  const pattern = new RegExp("^TRN-" + year + "-(\\d+)$", "i");
-
+  var config = getConfigMap_();
+  var semester = text_(configValue_(config, ["activeSemester", "운영학기", "학기"]));
+  var yearMatch = semester.match(/20\d{2}/);
+  var year = yearMatch ? yearMatch[0] : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy");
+  var rows = readTableOptional_(SHEETS.TRAININGS);
+  var max = 0;
   rows.forEach(function (row) {
-    const trainingId = String(row[TRAINING_COLUMNS.TRAINING_ID] || "").trim();
-    const match = trainingId.match(pattern);
-    if (match) {
-      maxSequence = Math.max(maxSequence, Number(match[1]) || 0);
-    }
+    var match = text_(row[TRAINING.ID]).match(new RegExp("^TRN-" + year + "-(\\d+)$"));
+    if (match) max = Math.max(max, Number(match[1]) || 0);
   });
-
-  return "TRN-" + year + "-" + String(maxSequence + 1).padStart(3, "0");
+  return "TRN-" + year + "-" + String(max + 1).padStart(3, "0");
 }
 
-function findInRows_(rows, columnName, value) {
-  const expected = String(value || "").trim();
-  return rows.find(function (row) {
-    return String(row[columnName] || "").trim() === expected;
-  }) || null;
+function generateStaffId_() {
+  var rows = readTableOptional_(SHEETS.STAFF);
+  var max = 0;
+  rows.forEach(function (row) {
+    var match = text_(row[STAFF.ID]).match(/^STF-(\d+)$/);
+    if (match) max = Math.max(max, Number(match[1]) || 0);
+  });
+  return "STF-" + String(max + 1).padStart(4, "0");
 }
 
-function countRows_(rows, columnName, value) {
-  return rows.filter(function (row) {
-    return String(row[columnName] || "").trim() === String(value || "").trim();
-  }).length;
+function generateId_(prefix) {
+  return prefix + "-" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd-HHmmss") + "-" + Utilities.getUuid().slice(0, 8);
 }
 
-function extractJsonData(response) {
-  const text = response.getContent();
-  const parsed = JSON.parse(text);
-  return parsed.data || parsed;
+function unique_(items) {
+  var seen = {};
+  return items.filter(function (item) {
+    if (seen[item]) return false;
+    seen[item] = true;
+    return true;
+  });
+}
+
+function map_(key, value) {
+  var obj = {};
+  obj[key] = value;
+  return obj;
+}
+
+function copyIfDefined_(target, source, sourceKey, targetKey) {
+  if (source[sourceKey] !== undefined) target[targetKey] = text_(source[sourceKey]);
+}
+
+function text_(value) {
+  return value === null || value === undefined ? "" : String(value).trim();
+}
+
+function yn_(value) {
+  return normalizeBoolean(value) ? "Y" : "N";
+}
+
+function requireText_(value, message, code) {
+  var text = text_(value);
+  if (!text) throw appError_(message, code);
+  return text;
+}
+
+function appError_(message, code) {
+  var error = new Error(message);
+  error.userMessage = message;
+  error.code = code;
+  return error;
+}
+
+function isExampleRow_(row) {
+  var joined = Object.keys(row).map(function (key) { return text_(row[key]); }).join(" ");
+  return /예시|샘플|sample|YOUR_|YOUR DEPLOYMENT ID/i.test(joined) && !/(TRN|STF|ATT|SIG|CERT)-/i.test(joined);
 }

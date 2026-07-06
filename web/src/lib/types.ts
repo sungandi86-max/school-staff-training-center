@@ -50,6 +50,11 @@ export type Training = {
   certificateRequired?: boolean;
   status?: string;
   activeStatus: string;
+  folderMode?: string;
+  driveFolderId?: string;
+  signatureFolderId?: string;
+  certificateFolderId?: string;
+  finalRosterFolderId?: string;
   note?: string;
 };
 

@@ -48,6 +48,7 @@ export type AppsScriptAction =
   | "deactivateStaff"
   | "verifyAdminCode"
   | "verifyStaff"
+  | "getTrainingTargets"
   | "checkTrainingTarget"
   | "checkDuplicateAttendance"
   | "saveQrAttendance"
@@ -62,6 +63,9 @@ export type AppsScriptAction =
   | "getTrainingAttendanceStatus"
   | "getFinalAttendancePreview"
   | "generateFinalAttendanceSheet"
+  | "getNotices"
+  | "getDepartments"
+  | "getCodeValues"
   | "validateSetup"
   | "updateSchoolConfig";
 
@@ -700,6 +704,11 @@ function normalizeTraining(training: Partial<Training>): Training {
     certificateRequired: Boolean(training.certificateRequired),
     status,
     activeStatus: status,
+    folderMode: training.folderMode ?? "",
+    driveFolderId: training.driveFolderId ?? "",
+    signatureFolderId: training.signatureFolderId ?? "",
+    certificateFolderId: training.certificateFolderId ?? "",
+    finalRosterFolderId: training.finalRosterFolderId ?? "",
     note: training.note ?? ""
   };
 }

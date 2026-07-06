@@ -263,6 +263,7 @@ p {
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
   padding-bottom: 20px;
+  scroll-padding-inline: 4px;
   scrollbar-width: none;
 }
 
@@ -281,13 +282,14 @@ p {
   color: #475569;
   font-size: 14px;
   font-weight: 850;
+  white-space: nowrap;
 }
 
 .nav-pill.active {
-  border-color: rgba(79, 70, 229, 0.25);
-  background: #f4f5ff;
-  color: var(--navy);
-  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.11);
+  border-color: transparent;
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 12px 28px rgba(31, 42, 68, 0.18);
 }
 
 .soft-alert {

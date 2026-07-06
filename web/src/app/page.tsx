@@ -137,6 +137,8 @@ const iconPaths: Record<IconName, ReactNode> = {
 const navItems = [
   { title: "홈", href: "/", icon: "home" as IconName, active: true },
   { title: "교육목록", href: "/trainings", icon: "list" as IconName },
+  { title: "QR 출석", href: "/attendance", icon: "qr" as IconName },
+  { title: "전자서명", href: "/signature", icon: "signature" as IconName },
   { title: "내 이수현황", href: "/my-status", icon: "status" as IconName },
   { title: "이수증 제출", href: "/certificate", icon: "upload" as IconName }
 ];

@@ -5,7 +5,6 @@ import {
   checkTrainingTarget,
   getStaffByNameDept,
   getTrainingDetail,
-  getTrainingList,
   loadAppConfig,
   saveQrAttendance
 } from "@/lib/apps-script";
@@ -49,10 +48,6 @@ function pageHref(path: string) {
   return path === "/" ? `${basePath}/` : `${basePath}${path}`;
 }
 
-function attendanceUrl(trainingId: string) {
-  return `${pageHref("/attendance")}?${new URLSearchParams({ trainingId }).toString()}`;
-}
-
 function signatureUrl(trainingId: string, staffId: string) {
   return `${pageHref("/signature")}?${new URLSearchParams({ trainingId, staffId }).toString()}`;
 }
@@ -60,27 +55,6 @@ function signatureUrl(trainingId: string, staffId: string) {
 function isActiveTraining(training?: Training) {
   const status = (training?.status ?? training?.activeStatus ?? "").trim().toLowerCase();
   return ["활성", "진행중", "준비중", "active", "ready", "y", "yes", "사용"].includes(status);
-}
-
-function isQrAvailableTraining(training: Training) {
-  return isActiveTraining(training) && training.qrEnabled;
-}
-
-function parseTrainingDate(date?: string) {
-  if (!date) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  const timestamp = new Date(date).getTime();
-  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
-}
-
-function trainingTimingLabel(training: Training) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const trainingDate = parseTrainingDate(training.date);
-
-  return trainingDate <= today.getTime() ? "진행중" : "예정";
 }
 
 function formatTrainingMeta(training?: Training) {
@@ -99,7 +73,6 @@ export default function AttendancePage() {
   const [runtimeConfig, setRuntimeConfig] = useState<AppConfig>();
   const [trainingId, setTrainingId] = useState("");
   const [training, setTraining] = useState<Training>();
-  const [availableTrainings, setAvailableTrainings] = useState<Training[]>([]);
   const [staffName, setStaffName] = useState("");
   const [department, setDepartment] = useState("");
   const [staff, setStaff] = useState<Staff>();
@@ -131,21 +104,7 @@ export default function AttendancePage() {
       setRuntimeConfig(configResult.config);
 
       if (!nextTrainingId) {
-        const trainingListResult = await getTrainingList(configResult.config);
-
-        if (ignore) {
-          return;
-        }
-
-        if (trainingListResult.error) {
-          setMessage(trainingListResult.error);
-          setStep("scan-guide");
-          return;
-        }
-
-        const qrTrainings = trainingListResult.data.filter(isQrAvailableTraining).sort((a, b) => parseTrainingDate(a.date) - parseTrainingDate(b.date));
-        setAvailableTrainings(qrTrainings);
-        setMessage("관리자가 출력한 교육별 QR 코드를 휴대폰 카메라로 스캔해 주세요.");
+        setMessage("교육장에서 제공된 QR을 스캔해주세요.");
         setStep("scan-guide");
         return;
       }
@@ -189,8 +148,8 @@ export default function AttendancePage() {
 
   const isTrainingMode = Boolean(trainingId);
   const canSubmitAttendance = useMemo(
-    () => Boolean(runtimeConfig && training && staffName.trim() && step !== "submitting" && step !== "complete"),
-    [runtimeConfig, staffName, step, training]
+    () => Boolean(runtimeConfig && training && staffName.trim() && department.trim() && step !== "submitting" && step !== "complete"),
+    [department, runtimeConfig, staffName, step, training]
   );
 
   async function handleAttendanceSubmit(event: FormEvent<HTMLFormElement>) {
@@ -295,69 +254,9 @@ export default function AttendancePage() {
                   <QrIcon />
                   <span>QR ATTENDANCE</span>
                 </div>
-                <h1>교육 QR을 스캔해주세요</h1>
-                <p>관리자가 출력해 둔 교육별 QR 코드를 휴대폰 카메라로 스캔하면 해당 교육 출석 화면이 바로 열립니다.</p>
-                <p className="permission-note">앱 내 카메라 스캔 기능은 추후 지원 예정입니다. 현재는 연수장에 비치된 QR 코드를 사용해 주세요.</p>
-                <div className="route-actions">
-                  <a className="primary-action" href={pageHref("/my-status")}>
-                    내 이수현황 보기
-                  </a>
-                  <a className="ghost-button" href={pageHref("/")}>
-                    홈으로
-                  </a>
-                </div>
-              </div>
-            </section>
-
-            <section aria-label="QR 출석 가능 교육 안내" className="training-section">
-              <div className="section-head training-head">
-                <div>
-                  <h2>QR 출석 가능 교육</h2>
-                  <p>아래 목록은 참고용입니다. 실제 출석은 교육장에 비치된 QR을 스캔해 진행해 주세요.</p>
-                </div>
-                <span className="status-chip status-completed">{availableTrainings.length}건</span>
-              </div>
-
-              <div className="training-list">
-                {availableTrainings.length ? (
-                  availableTrainings.map((item) => (
-                    <article className="training-card attendance-training-card" key={item.trainingId}>
-                      <div className="status-card-head">
-                        <div>
-                          <span className={trainingTimingLabel(item) === "진행중" ? "status-chip status-completed" : "status-chip status-review"}>
-                            {trainingTimingLabel(item)}
-                          </span>
-                          <p>{item.department || "담당부서 미입력"}</p>
-                          <strong>{item.title || "교육명 미입력"}</strong>
-                        </div>
-                      </div>
-                      <dl className="qr-training-info">
-                        <div>
-                          <dt>교육일자</dt>
-                          <dd>{item.date || "-"}</dd>
-                        </div>
-                        <div>
-                          <dt>교육시간</dt>
-                          <dd>{item.time || "-"}</dd>
-                        </div>
-                        <div>
-                          <dt>장소</dt>
-                          <dd>{item.place || item.location || "-"}</dd>
-                        </div>
-                      </dl>
-                      <a className="ghost-button compact" href={attendanceUrl(item.trainingId)}>
-                        출석 화면 열기
-                      </a>
-                    </article>
-                  ))
-                ) : (
-                  <div className="empty-training">
-                    <div>
-                      <strong>현재 QR 출석 가능한 교육이 없습니다.</strong>
-                      <p>활성 상태이고 QR 사용이 켜진 교육이 등록되면 이곳에 표시됩니다.</p>
-                    </div>
-                  </div>
-                )}
+                <h1>QR 링크로 접속해주세요</h1>
+                <p>교육장에서 제공된 QR을 스캔하면 해당 교육 출석 화면이 열립니다.</p>
+                <p className="permission-note">이 화면에서는 교육 목록이나 수동 출석 버튼을 제공하지 않습니다.</p>
               </div>
             </section>
           </>
@@ -392,7 +291,7 @@ export default function AttendancePage() {
 
                   <label className="field-group">
                     <span>소속부서</span>
-                    <input autoComplete="organization" onChange={(event) => setDepartment(event.target.value)} placeholder="동명이인일 때 입력" type="text" value={department} />
+                    <input autoComplete="organization" onChange={(event) => setDepartment(event.target.value)} placeholder="예: 교무부" type="text" value={department} />
                   </label>
 
                   <button className="primary-action" disabled={!canSubmitAttendance} type="submit">

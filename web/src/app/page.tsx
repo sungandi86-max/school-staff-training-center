@@ -137,21 +137,12 @@ const iconPaths: Record<IconName, ReactNode> = {
 const navItems = [
   { title: "홈", href: "/", icon: "home" as IconName, active: true },
   { title: "교육목록", href: "/trainings", icon: "list" as IconName },
-  { title: "QR 출석", href: "/attendance", icon: "qr" as IconName },
   { title: "전자서명", href: "/signature", icon: "signature" as IconName },
   { title: "내 이수현황", href: "/my-status", icon: "status" as IconName },
   { title: "이수증 제출", href: "/certificate", icon: "upload" as IconName }
 ];
 
 const featureCards = [
-  {
-    title: "QR 출석",
-    description: "연수장에 비치된 QR을 스캔하고 출석을 완료합니다.",
-    action: "출석하기",
-    href: "/attendance",
-    icon: "qr" as IconName,
-    tone: "blue"
-  },
   {
     title: "내 이수현황",
     description: "내가 완료한 교육과 남은 교육을 확인합니다.",
@@ -175,6 +166,14 @@ const featureCards = [
     href: "/certificate",
     icon: "upload" as IconName,
     tone: "lavender"
+  },
+  {
+    title: "교육목록",
+    description: "학교에서 등록한 교직원 교육 일정과 제출 필요 여부를 확인합니다.",
+    action: "목록보기",
+    href: "/trainings",
+    icon: "list" as IconName,
+    tone: "blue"
   }
 ];
 
@@ -355,8 +354,8 @@ export default function HomePage() {
               <>
                 <h2>{activeTraining.title || "교육명 미입력"}</h2>
                 <p>{formatTrainingMeta(activeTraining.date, activeTraining.time, activeTraining.place ?? activeTraining.location)}</p>
-                <a className="primary-action" href={pageHref("/attendance")}>
-                  QR 출석하기
+                <a className="primary-action" href={pageHref("/trainings")}>
+                  교육목록 보기
                   <Icon name="chevron" />
                 </a>
               </>
@@ -422,16 +421,10 @@ export default function HomePage() {
                   </div>
                   <div className="badge-row">
                     {training.category ? <span>{training.category}</span> : null}
-                    <span>{training.qrEnabled ? "QR 사용" : "QR 미사용"}</span>
+                    <span>{training.qrEnabled ? "현장 QR 운영" : "QR 미사용"}</span>
                     <span>{training.signatureRequired ? "서명 필요" : "서명 없음"}</span>
                     {training.certificateRequired ? <span>이수증 제출</span> : null}
                   </div>
-                  {training.qrEnabled ? (
-                    <a className="ghost-button" href={pageHref("/attendance")}>
-                      QR 출석하기
-                      <Icon name="chevron" />
-                    </a>
-                  ) : null}
                 </article>
               ))
             ) : (
@@ -446,6 +439,14 @@ export default function HomePage() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="qr-guide-card" aria-label="현장 QR 출석 안내">
+          <div className="section-kicker">
+            <Icon name="qr" />
+            <span>현장 QR 출석</span>
+          </div>
+          <p>교육 당일 연수장에 비치된 QR을 스캔하면 출석 화면이 열립니다.</p>
         </section>
 
         <footer className="footer-bar">

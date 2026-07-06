@@ -5,14 +5,13 @@ import { getBasePath } from "@/lib/paths";
 import type { Training } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
 
-type TrainingFilter = "all" | "active" | "qr" | "signature" | "certificate" | "inactive";
+type TrainingFilter = "all" | "active" | "signature" | "certificate" | "inactive";
 
 const APP_BASE_PATH = getBasePath();
 
 const FILTERS: Array<{ key: TrainingFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "active", label: "진행중/활성" },
-  { key: "qr", label: "QR 출석" },
   { key: "signature", label: "전자서명 필요" },
   { key: "certificate", label: "이수증 제출 필요" },
   { key: "inactive", label: "종료/비활성" }
@@ -40,11 +39,6 @@ function ListIcon() {
 
 function pageHref(path: string) {
   return path === "/" ? `${APP_BASE_PATH}/` : `${APP_BASE_PATH}${path}`;
-}
-
-function attendanceHref(trainingId: string) {
-  const params = new URLSearchParams({ trainingId });
-  return `${pageHref("/attendance")}?${params.toString()}`;
 }
 
 function normalizedStatus(training: Training) {
@@ -160,10 +154,6 @@ export default function TrainingsPage() {
           return isActive(training);
         }
 
-        if (filter === "qr") {
-          return training.qrEnabled;
-        }
-
         if (filter === "signature") {
           return training.signatureRequired;
         }
@@ -182,7 +172,6 @@ export default function TrainingsPage() {
   }, [filter, query, trainings]);
 
   const activeCount = useMemo(() => trainings.filter(isActive).length, [trainings]);
-  const qrCount = useMemo(() => trainings.filter((training) => training.qrEnabled).length, [trainings]);
   const signatureCount = useMemo(() => trainings.filter((training) => training.signatureRequired).length, [trainings]);
   const certificateCount = useMemo(() => trainings.filter((training) => training.certificateRequired).length, [trainings]);
 
@@ -206,7 +195,7 @@ export default function TrainingsPage() {
               <span>TRAINING LIST</span>
             </div>
             <h1>학교에서 등록한 교육을 확인합니다.</h1>
-            <p>교육별 일정과 장소, QR 출석, 전자서명, 이수증 제출 필요 여부를 한눈에 확인하고 필요한 기능으로 이동할 수 있습니다.</p>
+            <p>교육별 일정과 장소, 전자서명, 이수증 제출 필요 여부를 한눈에 확인합니다. QR 출석은 교육장에 비치된 QR을 통해 진행합니다.</p>
           </div>
         </section>
 
@@ -226,8 +215,8 @@ export default function TrainingsPage() {
             <strong>{activeCount}</strong>
           </div>
           <div className="status-summary-card">
-            <span>QR 출석</span>
-            <strong>{qrCount}</strong>
+            <span>현장 QR 운영</span>
+            <strong>{trainings.filter((training) => training.qrEnabled).length}</strong>
           </div>
           <div className="status-summary-card">
             <span>전자서명/이수증</span>
@@ -273,7 +262,7 @@ export default function TrainingsPage() {
           <div className="section-head">
             <div>
               <h2>전체 교육</h2>
-              <p>일반 교직원에게 필요한 QR 출석, 전자서명, 이수증 제출 이동 버튼만 표시합니다.</p>
+              <p>일반 교직원에게 필요한 전자서명과 이수증 제출 이동 버튼만 표시합니다.</p>
             </div>
           </div>
 
@@ -310,18 +299,13 @@ export default function TrainingsPage() {
                   </dl>
 
                   <div className="badge-row">
-                    <span>{training.qrEnabled ? "QR 사용" : "QR 미사용"}</span>
+                    <span>{training.qrEnabled ? "현장 QR 운영" : "QR 미사용"}</span>
                     <span>{training.signatureRequired ? "전자서명 필요" : "전자서명 없음"}</span>
                     <span>{training.certificateRequired ? "이수증 제출 필요" : "이수증 제출 없음"}</span>
                     <span>{training.status || training.activeStatus || "상태 미입력"}</span>
                   </div>
 
                   <div className="route-actions">
-                    {training.qrEnabled ? (
-                      <a className="primary-action" href={attendanceHref(training.trainingId)}>
-                        QR 출석
-                      </a>
-                    ) : null}
                     {training.signatureRequired ? (
                       <a className="ghost-button" href={pageHref("/signature")}>
                         전자서명

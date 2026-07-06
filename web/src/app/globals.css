@@ -1229,10 +1229,31 @@ p {
 }
 
 .admin-section,
-.training-section {
+.training-section,
+.qr-guide-card {
   display: grid;
   gap: 20px;
   padding: 22px;
+}
+
+.qr-guide-card {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: var(--radius-large);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.92) 100%);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+.qr-guide-card .section-kicker {
+  color: #334155;
+}
+
+.qr-guide-card p {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.6;
 }
 
 .section-head {

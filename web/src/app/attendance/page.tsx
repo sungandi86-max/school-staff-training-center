@@ -9,12 +9,11 @@ import {
   loadAppConfig,
   saveQrAttendance
 } from "@/lib/apps-script";
+import { getBasePath } from "@/lib/paths";
 import type { AppConfig, DuplicateAttendanceResult, SaveAttendanceResult, Staff, Training, TrainingTargetResult } from "@/lib/types";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-const APP_BASE_PATH = "/school-staff-training-center";
-
-type AttendanceStep = "setup" | "ready" | "checking" | "verified" | "saving" | "complete";
+type AttendanceStep = "loading" | "scan-guide" | "ready" | "submitting" | "complete" | "blocked";
 
 function CheckIcon() {
   return (
@@ -27,9 +26,9 @@ function CheckIcon() {
 function QrIcon() {
   return (
     <svg aria-hidden="true" className="icon" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.85" viewBox="0 0 24 24">
-      <rect width="6" height="6" x="4" y="4" rx="1.4" />
-      <rect width="6" height="6" x="14" y="4" rx="1.4" />
-      <rect width="6" height="6" x="4" y="14" rx="1.4" />
+      <rect height="6" rx="1.4" width="6" x="4" y="4" />
+      <rect height="6" rx="1.4" width="6" x="14" y="4" />
+      <rect height="6" rx="1.4" width="6" x="4" y="14" />
       <path d="M15 15h2v2h-2z" />
       <path d="M20 15v5h-5" />
       <path d="M20 20h-2" />
@@ -46,15 +45,16 @@ function getTrainingIdFromUrl() {
 }
 
 function pageHref(path: string) {
-  return path === "/" ? `${APP_BASE_PATH}/` : `${APP_BASE_PATH}${path}/`;
+  const basePath = getBasePath();
+  return path === "/" ? `${basePath}/` : `${basePath}${path}`;
 }
 
 function attendanceUrl(trainingId: string) {
-  return `${APP_BASE_PATH}/attendance?${new URLSearchParams({ trainingId }).toString()}`;
+  return `${pageHref("/attendance")}?${new URLSearchParams({ trainingId }).toString()}`;
 }
 
 function signatureUrl(trainingId: string, staffId: string) {
-  return `${APP_BASE_PATH}/signature?${new URLSearchParams({ trainingId, staffId }).toString()}`;
+  return `${pageHref("/signature")}?${new URLSearchParams({ trainingId, staffId }).toString()}`;
 }
 
 function isActiveTraining(training?: Training) {
@@ -91,6 +91,10 @@ function formatTrainingMeta(training?: Training) {
   return [training.date, training.time, training.place ?? training.location, training.department].filter(Boolean).join(" · ");
 }
 
+function getFriendlyError(fallback: string, error?: string) {
+  return error?.trim() || fallback;
+}
+
 export default function AttendancePage() {
   const [runtimeConfig, setRuntimeConfig] = useState<AppConfig>();
   const [trainingId, setTrainingId] = useState("");
@@ -102,8 +106,8 @@ export default function AttendancePage() {
   const [targetResult, setTargetResult] = useState<TrainingTargetResult>();
   const [duplicateResult, setDuplicateResult] = useState<DuplicateAttendanceResult>();
   const [saveResult, setSaveResult] = useState<SaveAttendanceResult>();
-  const [step, setStep] = useState<AttendanceStep>("setup");
-  const [message, setMessage] = useState("출석 설정을 불러오는 중입니다.");
+  const [step, setStep] = useState<AttendanceStep>("loading");
+  const [message, setMessage] = useState("QR 출석 정보를 불러오는 중입니다.");
 
   useEffect(() => {
     let ignore = false;
@@ -120,7 +124,7 @@ export default function AttendancePage() {
 
       if (!configResult.ok) {
         setMessage(configResult.message);
-        setStep("setup");
+        setStep("blocked");
         return;
       }
 
@@ -135,14 +139,14 @@ export default function AttendancePage() {
 
         if (trainingListResult.error) {
           setMessage(trainingListResult.error);
-          setStep("setup");
+          setStep("scan-guide");
           return;
         }
 
         const qrTrainings = trainingListResult.data.filter(isQrAvailableTraining).sort((a, b) => parseTrainingDate(a.date) - parseTrainingDate(b.date));
         setAvailableTrainings(qrTrainings);
-        setMessage(qrTrainings.length ? "출석할 교육을 선택하거나 연수장의 QR 코드를 스캔해 주세요." : "현재 QR 출석 가능한 교육이 없습니다.");
-        setStep("setup");
+        setMessage("관리자가 출력한 교육별 QR 코드를 휴대폰 카메라로 스캔해 주세요.");
+        setStep("scan-guide");
         return;
       }
 
@@ -153,26 +157,26 @@ export default function AttendancePage() {
       }
 
       if (trainingResult.error || !trainingResult.data) {
-        setMessage("교육 정보를 찾을 수 없습니다. 교육목록에서 다시 선택해 주세요.");
-        setStep("setup");
+        setMessage(getFriendlyError("교육 정보를 찾을 수 없습니다. 출력된 QR 코드를 다시 확인해 주세요.", trainingResult.error));
+        setStep("blocked");
         return;
       }
 
       setTraining(trainingResult.data);
 
       if (!isActiveTraining(trainingResult.data)) {
-        setMessage("현재 활성 상태인 교육만 QR 출석할 수 있습니다.");
-        setStep("setup");
+        setMessage("현재 활성 상태인 교육만 QR 출석을 진행할 수 있습니다.");
+        setStep("blocked");
         return;
       }
 
       if (!trainingResult.data.qrEnabled) {
-        setMessage("이 교육은 QR 출석을 사용하지 않습니다.");
-        setStep("setup");
+        setMessage("이 교육은 QR 출석을 사용하지 않습니다. 담당자에게 확인해 주세요.");
+        setStep("blocked");
         return;
       }
 
-      setMessage("성명과 소속부서로 본인 확인 후 출석을 진행해 주세요.");
+      setMessage("성명과 소속부서를 입력하면 교육대상 여부를 확인한 뒤 출석을 저장합니다.");
       setStep("ready");
     }
 
@@ -183,108 +187,79 @@ export default function AttendancePage() {
     };
   }, []);
 
-  const canLookupStaff = useMemo(
-    () => Boolean(runtimeConfig && training && staffName.trim() && step !== "checking" && step !== "saving"),
+  const isTrainingMode = Boolean(trainingId);
+  const canSubmitAttendance = useMemo(
+    () => Boolean(runtimeConfig && training && staffName.trim() && step !== "submitting" && step !== "complete"),
     [runtimeConfig, staffName, step, training]
   );
 
-  const canSaveAttendance = Boolean(
-    runtimeConfig &&
-      training &&
-      staff &&
-      targetResult?.isTarget &&
-      duplicateResult &&
-      !duplicateResult.duplicate &&
-      step === "verified"
-  );
-
-  function handleScanStart() {
-    setMessage("카메라 스캔 기능은 다음 단계에서 연결됩니다. 지금은 휴대폰 카메라로 QR을 스캔하거나 아래 교육을 선택해 주세요.");
-  }
-
-  async function handleStaffLookup(event: FormEvent<HTMLFormElement>) {
+  async function handleAttendanceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!runtimeConfig || !training || !trainingId) {
-      setMessage("교육 정보를 먼저 확인해 주세요.");
+      setMessage("교육 QR을 먼저 스캔해 주세요.");
       return;
     }
 
-    setStep("checking");
+    setStep("submitting");
     setStaff(undefined);
     setTargetResult(undefined);
     setDuplicateResult(undefined);
     setSaveResult(undefined);
-    setMessage("교직원 정보와 출석 가능 여부를 확인하고 있습니다.");
+    setMessage("본인 정보와 출석 가능 여부를 확인하고 있습니다.");
 
     const staffResult = await getStaffByNameDept(runtimeConfig, staffName.trim(), department.trim());
 
     if (staffResult.error || !staffResult.data) {
       setStep("ready");
-      setMessage(staffResult.error || "교직원 정보를 확인할 수 없습니다. 동명이인이 있으면 소속부서를 입력해 주세요.");
-      return;
-    }
-
-    const target = await checkTrainingTarget(runtimeConfig, training.trainingId, staffResult.data.staffId);
-
-    if (target.error || !target.data?.isTarget) {
-      setStaff(staffResult.data);
-      setTargetResult(target.data);
-      setStep("ready");
-      setMessage("이 교육의 대상자로 등록되어 있지 않아 출석할 수 없습니다.");
-      return;
-    }
-
-    const duplicate = await checkDuplicateAttendance(runtimeConfig, training.trainingId, staffResult.data.staffId);
-
-    if (duplicate.error || !duplicate.data) {
-      setStaff(staffResult.data);
-      setTargetResult(target.data);
-      setStep("ready");
-      setMessage("기존 출석 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setMessage(getFriendlyError("교직원 정보를 확인할 수 없습니다. 동명이인이 있으면 소속부서를 입력해 주세요.", staffResult.error));
       return;
     }
 
     setStaff(staffResult.data);
+
+    const target = await checkTrainingTarget(runtimeConfig, training.trainingId, staffResult.data.staffId);
     setTargetResult(target.data);
+
+    if (target.error || !target.data?.isTarget) {
+      setStep("ready");
+      setMessage(getFriendlyError("교육 대상자가 아닙니다.", target.error));
+      return;
+    }
+
+    const duplicate = await checkDuplicateAttendance(runtimeConfig, training.trainingId, staffResult.data.staffId);
     setDuplicateResult(duplicate.data);
 
+    if (duplicate.error || !duplicate.data) {
+      setStep("ready");
+      setMessage(getFriendlyError("기존 출석 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", duplicate.error));
+      return;
+    }
+
     if (duplicate.data.duplicate) {
-      setStep("verified");
-      setMessage("이미 출석 기록이 있습니다. 중복 출석은 저장하지 않습니다.");
+      setStep("complete");
+      setMessage("이미 출석한 기록이 있습니다. 중복 저장하지 않았습니다.");
       return;
     }
 
-    setStep("verified");
-    setMessage("출석할 수 있습니다. 아래 버튼을 눌러 출석을 저장해 주세요.");
-  }
-
-  async function handleSaveAttendance() {
-    if (!runtimeConfig || !training || !staff) {
-      setMessage("출석 저장에 필요한 정보를 다시 확인해 주세요.");
-      return;
-    }
-
-    setStep("saving");
     setMessage("출석을 저장하고 있습니다.");
-
-    const result = await saveQrAttendance(runtimeConfig, training.trainingId, staff.staffId);
+    const result = await saveQrAttendance(runtimeConfig, training.trainingId, staffResult.data.staffId);
 
     if (result.error || !result.data) {
-      setStep("verified");
-      setMessage("출석 저장에 실패했습니다. 다시 시도해 주세요.");
+      setStep("ready");
+      setMessage(getFriendlyError("출석 저장에 실패했습니다. 다시 시도해 주세요.", result.error));
       return;
     }
 
     if (result.data.duplicate || result.data.status === "already") {
       setDuplicateResult({
-        duplicate: true,
         attendanceId: result.data.attendanceId,
         attendedAt: result.data.attendedAt,
+        duplicate: true,
         processStatus: result.data.processStatus
       });
-      setStep("verified");
-      setMessage("이미 출석 기록이 있어 새로 저장하지 않았습니다.");
+      setStep("complete");
+      setMessage("이미 출석한 기록이 있어 새로 저장하지 않았습니다.");
       return;
     }
 
@@ -292,8 +267,6 @@ export default function AttendancePage() {
     setStep("complete");
     setMessage("출석이 완료되었습니다.");
   }
-
-  const isSelectionMode = !trainingId;
 
   return (
     <main className="page">
@@ -304,7 +277,7 @@ export default function AttendancePage() {
           </button>
           <strong>QR 출석</strong>
           <a className="ghost-button compact" href={pageHref("/")}>
-            홈
+            홈으로
           </a>
         </header>
 
@@ -314,34 +287,35 @@ export default function AttendancePage() {
           </div>
         ) : null}
 
-        {isSelectionMode ? (
+        {!isTrainingMode ? (
           <>
-            <section className="today-card attendance-start-card" aria-label="QR 스캔 시작">
+            <section aria-label="QR 스캔 안내" className="today-card attendance-start-card">
               <div className="today-copy">
                 <div className="section-kicker">
                   <QrIcon />
-                  <span>QR 출석</span>
+                  <span>QR ATTENDANCE</span>
                 </div>
-                <h1>QR 스캔을 시작하세요</h1>
-                <p>연수장에 비치된 QR 코드를 휴대폰 카메라로 스캔하여 출석을 진행하세요.</p>
+                <h1>교육 QR을 스캔해주세요</h1>
+                <p>관리자가 출력해 둔 교육별 QR 코드를 휴대폰 카메라로 스캔하면 해당 교육 출석 화면이 바로 열립니다.</p>
+                <p className="permission-note">앱 내 카메라 스캔 기능은 추후 지원 예정입니다. 현재는 연수장에 비치된 QR 코드를 사용해 주세요.</p>
                 <div className="route-actions">
-                  <button className="primary-action" onClick={handleScanStart} type="button">
-                    QR 스캔 시작
-                  </button>
-                  <a className="ghost-button" href={pageHref("/my-status")}>
-                    내 이수현황으로 이동
+                  <a className="primary-action" href={pageHref("/my-status")}>
+                    내 이수현황 보기
+                  </a>
+                  <a className="ghost-button" href={pageHref("/")}>
+                    홈으로
                   </a>
                 </div>
               </div>
             </section>
 
-            <section className="training-section" aria-label="오늘 진행 교육">
+            <section aria-label="QR 출석 가능 교육 안내" className="training-section">
               <div className="section-head training-head">
                 <div>
-                  <h2>오늘 진행 교육</h2>
-                  <p>출석 가능한 교육을 선택할 수 있습니다.</p>
+                  <h2>QR 출석 가능 교육</h2>
+                  <p>아래 목록은 참고용입니다. 실제 출석은 교육장에 비치된 QR을 스캔해 진행해 주세요.</p>
                 </div>
-                <span className="status-chip status-completed">{availableTrainings.length}개</span>
+                <span className="status-chip status-completed">{availableTrainings.length}건</span>
               </div>
 
               <div className="training-list">
@@ -371,20 +345,15 @@ export default function AttendancePage() {
                           <dd>{item.place || item.location || "-"}</dd>
                         </div>
                       </dl>
-                      <div className="route-actions">
-                        <a className="primary-action" href={attendanceUrl(item.trainingId)}>
-                          QR 출석
-                        </a>
-                        <a className="ghost-button compact" href={`${APP_BASE_PATH}/admin/qr/`}>
-                          QR 출력
-                        </a>
-                      </div>
+                      <a className="ghost-button compact" href={attendanceUrl(item.trainingId)}>
+                        출석 화면 열기
+                      </a>
                     </article>
                   ))
                 ) : (
                   <div className="empty-training">
                     <div>
-                      <strong>QR 출석 가능한 교육이 없습니다.</strong>
+                      <strong>현재 QR 출석 가능한 교육이 없습니다.</strong>
                       <p>활성 상태이고 QR 사용이 켜진 교육이 등록되면 이곳에 표시됩니다.</p>
                     </div>
                   </div>
@@ -394,28 +363,28 @@ export default function AttendancePage() {
           </>
         ) : (
           <>
-            <section className="today-card" aria-label="선택한 교육">
+            <section aria-label="선택된 교육" className="today-card">
               <div className="today-copy">
                 <div className="section-kicker">
-                  <CheckIcon />
-                  <span>선택한 교육</span>
+                  <QrIcon />
+                  <span>선택된 교육</span>
                 </div>
                 <h1>{training?.title ?? "교육 정보를 확인하는 중입니다"}</h1>
-                <p>{training ? formatTrainingMeta(training) : "교육 정보를 불러오고 있습니다."}</p>
+                <p>{training ? formatTrainingMeta(training) : "QR에 연결된 교육 정보를 불러오고 있습니다."}</p>
                 {trainingId ? <span className="permission-note">교육ID {trainingId}</span> : null}
               </div>
             </section>
 
-            {training ? (
-              <section className="training-section" aria-label="본인 조회">
+            {training && step !== "blocked" ? (
+              <section aria-label="본인 확인" className="training-section">
                 <div className="section-head">
                   <div>
-                    <h2>본인 조회</h2>
-                    <p>성명과 소속부서로 교육 대상 여부와 기존 출석 여부를 확인합니다. 동명이인이 있을 때는 소속부서를 입력해 주세요.</p>
+                    <h2>본인 확인</h2>
+                    <p>성명과 소속부서로 교육대상 여부를 확인하고 출석을 저장합니다. 동명이인이 있을 때는 소속부서를 입력해 주세요.</p>
                   </div>
                 </div>
 
-                <form className="attendance-form" onSubmit={handleStaffLookup}>
+                <form className="attendance-form" onSubmit={handleAttendanceSubmit}>
                   <label className="field-group">
                     <span>성명</span>
                     <input autoComplete="name" onChange={(event) => setStaffName(event.target.value)} placeholder="예: 박숙현" type="text" value={staffName} />
@@ -426,25 +395,25 @@ export default function AttendancePage() {
                     <input autoComplete="organization" onChange={(event) => setDepartment(event.target.value)} placeholder="동명이인일 때 입력" type="text" value={department} />
                   </label>
 
-                  <button className="primary-action" disabled={!canLookupStaff} type="submit">
-                    출석 가능 여부 확인
+                  <button className="primary-action" disabled={!canSubmitAttendance} type="submit">
+                    {step === "submitting" ? "출석 처리 중" : "출석하기"}
                   </button>
                 </form>
               </section>
             ) : null}
 
             {staff ? (
-              <section className="training-section" aria-label="출석 상태">
+              <section aria-label="출석 확인 결과" className="training-section">
                 <div className="section-head">
                   <div>
-                    <h2>출석 상태</h2>
+                    <h2>출석 확인 결과</h2>
                     <p>
-                      {staff.name} · {staff.department || "부서 미입력"}
+                      {staff.name} · {staff.department || "소속부서 미입력"} {staff.position ? `· ${staff.position}` : ""}
                     </p>
                   </div>
                   <div className="badge-row">
                     <span>{targetResult?.isTarget ? "교육대상" : "대상 아님"}</span>
-                    <span>{duplicateResult?.duplicate ? "이미 출석" : "출석 가능"}</span>
+                    <span>{duplicateResult?.duplicate ? "이미 출석" : saveResult ? "출석 완료" : "확인 중"}</span>
                   </div>
                 </div>
 
@@ -453,17 +422,11 @@ export default function AttendancePage() {
                     기존 출석 기록이 있습니다. {duplicateResult.attendedAt ? `출석일시: ${duplicateResult.attendedAt}` : ""}
                   </div>
                 ) : null}
-
-                {canSaveAttendance ? (
-                  <button className="primary-action" onClick={handleSaveAttendance} type="button">
-                    출석하기
-                  </button>
-                ) : null}
               </section>
             ) : null}
 
             {step === "complete" && saveResult ? (
-              <section className="today-card" aria-label="출석 완료">
+              <section aria-label="출석 완료" className="today-card">
                 <div className="today-copy">
                   <div className="section-kicker">
                     <CheckIcon />
@@ -473,21 +436,45 @@ export default function AttendancePage() {
                   <p>
                     {saveResult.trainingTitle || training?.title} · {saveResult.attendedAt}
                   </p>
-                  {saveResult.signatureRequired ? (
+                  {saveResult.signatureRequired && staff && training ? (
                     <>
-                      <p>이 교육은 전자서명이 필요합니다.</p>
-                      {staff && training ? (
-                        <a className="primary-action" href={signatureUrl(training.trainingId, staff.staffId)}>
-                          전자서명 하러가기
-                        </a>
-                      ) : null}
+                      <p>이 교육은 전자서명이 필요합니다. 아래 버튼을 눌러 서명을 이어서 제출해 주세요.</p>
+                      <a className="primary-action" href={signatureUrl(training.trainingId, staff.staffId)}>
+                        전자서명하기
+                      </a>
                     </>
                   ) : (
                     <p>전자서명이 필요하지 않은 교육입니다. 출석 처리가 완료되었습니다.</p>
                   )}
-                  <a className="ghost-button" href={pageHref("/")}>
-                    홈으로 돌아가기
-                  </a>
+                  <div className="route-actions">
+                    <a className="ghost-button" href={pageHref("/my-status")}>
+                      내 이수현황 보기
+                    </a>
+                    <a className="ghost-button" href={pageHref("/")}>
+                      홈으로
+                    </a>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {step === "complete" && duplicateResult?.duplicate && !saveResult ? (
+              <section aria-label="중복 출석 안내" className="today-card">
+                <div className="today-copy">
+                  <div className="section-kicker">
+                    <CheckIcon />
+                    <span>출석 확인</span>
+                  </div>
+                  <h2>이미 출석한 교육입니다.</h2>
+                  <p>중복 출석은 저장하지 않았습니다. 필요하면 담당자에게 문의해 주세요.</p>
+                  <div className="route-actions">
+                    <a className="ghost-button" href={pageHref("/my-status")}>
+                      내 이수현황 보기
+                    </a>
+                    <a className="ghost-button" href={pageHref("/")}>
+                      홈으로
+                    </a>
+                  </div>
                 </div>
               </section>
             ) : null}

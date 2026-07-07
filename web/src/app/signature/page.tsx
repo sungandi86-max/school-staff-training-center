@@ -129,7 +129,7 @@ export default function SignaturePage() {
       setSingleMode(true);
 
       if (!params.staffId) {
-        setMessage("QR 출석 완료 화면에서 전자서명을 다시 열어 주세요.");
+        setMessage("단일 교육 서명 링크에는 교직원 정보가 필요합니다. 현장 QR 화면에서 본인 확인 후 서명해 주세요.");
         setStep("setup");
         return;
       }
@@ -151,7 +151,7 @@ export default function SignaturePage() {
       }
 
       if (staffResult.error || !staffResult.data) {
-        setMessage("교직원 정보를 찾을 수 없습니다. QR 출석을 먼저 완료해 주세요.");
+        setMessage("교직원 정보를 찾을 수 없습니다. 현장 QR 화면에서 본인 확인 후 서명해 주세요.");
         setStep("setup");
         return;
       }
@@ -293,8 +293,8 @@ export default function SignaturePage() {
   async function handleLookup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!runtimeConfig || !name.trim()) {
-      setMessage("성명을 입력해 주세요.");
+    if (!runtimeConfig || !name.trim() || !department.trim()) {
+      setMessage("성명과 소속부서를 입력해 주세요.");
       return;
     }
 
@@ -467,7 +467,7 @@ export default function SignaturePage() {
               <span>전자서명</span>
             </div>
             <h1>{training?.title ?? "전자서명"}</h1>
-            <p>{singleMode ? "전자서명 제출로 출석과 이수 증빙을 완료합니다." : "서명이 필요한 교육을 확인하고 전자서명을 제출합니다."}</p>
+            <p>{singleMode ? "단일 교육 전자서명을 제출합니다." : "여러 교육을 선택하고 한 번의 서명으로 전자서명을 제출합니다."}</p>
           </div>
         </section>
 
@@ -487,14 +487,14 @@ export default function SignaturePage() {
             </div>
             <form className="attendance-form" onSubmit={handleLookup}>
               <label className="field-group">
-                <span>성명</span>
-                <input autoComplete="name" onChange={(event) => setName(event.target.value)} placeholder="예: 박숙현" type="text" value={name} />
+                <span>성명 *</span>
+                <input autoComplete="name" onChange={(event) => setName(event.target.value)} placeholder="성명을 입력하세요" type="text" value={name} />
               </label>
               <label className="field-group">
-                <span>소속부서</span>
-                <input autoComplete="organization" onChange={(event) => setDepartment(event.target.value)} placeholder="동명이인일 때 입력" type="text" value={department} />
+                <span>소속부서 *</span>
+                <input autoComplete="organization" onChange={(event) => setDepartment(event.target.value)} placeholder="소속부서를 입력하세요" type="text" value={department} />
               </label>
-              <button className="primary-action" disabled={step === "setup" || !name.trim()} type="submit">
+              <button className="primary-action" disabled={step === "setup" || !name.trim() || !department.trim()} type="submit">
                 조회하기
               </button>
             </form>
@@ -561,7 +561,7 @@ export default function SignaturePage() {
             <div className="section-head">
               <div>
                 <h2>서명 필요한 교육</h2>
-                <p>날짜별로 교육을 선택하고 한 번의 서명으로 저장합니다.</p>
+                <p>날짜별로 여러 교육을 선택하고 한 번의 서명으로 교육별 전자서명 기록을 저장합니다.</p>
               </div>
               <div className="badge-row">
                 <button className={filter === "today" ? "primary-action compact" : "ghost-button compact"} onClick={() => setFilter("today")} type="button">
@@ -614,7 +614,7 @@ export default function SignaturePage() {
                               />
                             </div>
                             <div className="badge-row">
-                              <span>{item.signatureDone ? "출석 인정" : "서명 제출 시 출석 인정"}</span>
+                              <span>{item.signatureDone ? "전자서명 기록 저장됨" : "서명 제출 시 이수 인정"}</span>
                               <span>{item.signatureDone ? "서명 완료" : "서명 필요"}</span>
                               {!item.selectable && item.blockedReason ? <span>{item.blockedReason}</span> : null}
                             </div>
@@ -667,7 +667,7 @@ export default function SignaturePage() {
                 다시쓰기
               </button>
               <button className="primary-action" disabled={!canSave} onClick={handleSave} type="button">
-                {step === "saving" ? "저장 중" : `선택한 교육 ${selectedItems.length}건에 서명 저장`}
+                {step === "saving" ? "저장 중" : `선택한 교육 ${selectedItems.length}건 전자서명 제출`}
               </button>
             </div>
           </section>

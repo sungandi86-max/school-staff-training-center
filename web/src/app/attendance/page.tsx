@@ -94,7 +94,7 @@ export default function AttendancePage() {
   const [bulkResult, setBulkResult] = useState<BulkSignatureResult>();
   const [hasSignature, setHasSignature] = useState(false);
   const [step, setStep] = useState<AttendanceStep>("loading");
-  const [message, setMessage] = useState("QR 출석 정보를 불러오는 중입니다.");
+  const [message, setMessage] = useState("현장 서명 정보를 불러오는 중입니다.");
 
   useEffect(() => {
     let ignore = false;
@@ -138,13 +138,13 @@ export default function AttendancePage() {
       setTraining(trainingResult.data);
 
       if (!isActiveTraining(trainingResult.data)) {
-        setMessage("현재 활성 상태인 교육만 QR 출석을 진행할 수 있습니다.");
+        setMessage("현재 활성 상태인 교육만 현장 서명을 진행할 수 있습니다.");
         setStep("blocked");
         return;
       }
 
       if (!trainingResult.data.qrEnabled) {
-        setMessage("이 교육은 QR 출석을 사용하지 않습니다. 담당자에게 확인해 주세요.");
+        setMessage("이 교육은 현장 QR 서명을 사용하지 않습니다. 담당자에게 확인해 주세요.");
         setStep("blocked");
         return;
       }
@@ -211,7 +211,7 @@ export default function AttendancePage() {
     event.preventDefault();
 
     if (!runtimeConfig || !training || !trainingId) {
-      setMessage("교육 QR을 먼저 스캔해 주세요.");
+      setMessage("교육장에서 제공된 QR을 먼저 스캔해 주세요.");
       return;
     }
 
@@ -259,7 +259,7 @@ export default function AttendancePage() {
 
     if (signature.data.exists) {
       setStep("complete");
-      setMessage("이미 출석 및 전자서명이 완료된 교육입니다.");
+      setMessage("이미 전자서명 기록이 저장된 교육입니다.");
       return;
     }
 
@@ -379,7 +379,7 @@ export default function AttendancePage() {
           <button className="ghost-button compact" onClick={() => window.history.back()} type="button">
             뒤로가기
           </button>
-          <strong>QR 출석</strong>
+          <strong>현장 서명</strong>
           <a className="ghost-button compact" href={pageHref("/")}>
             홈으로
           </a>
@@ -397,10 +397,10 @@ export default function AttendancePage() {
               <div className="today-copy">
                 <div className="section-kicker">
                   <QrIcon />
-                  <span>QR ATTENDANCE</span>
+                  <span>FIELD SIGNATURE</span>
                 </div>
                 <h1>QR 링크로 접속해주세요</h1>
-                <p>교육장에서 제공된 QR을 스캔하면 해당 교육 출석 화면이 열립니다.</p>
+                <p>교육장에서 QR을 스캔하고 전자서명까지 완료하면 출석으로 인정됩니다.</p>
                 <p className="permission-note">이 화면에서는 교육 목록이나 수동 출석 버튼을 제공하지 않습니다.</p>
               </div>
             </section>
@@ -468,7 +468,7 @@ export default function AttendancePage() {
                 <div className="section-head">
                   <div>
                     <h2>전자서명</h2>
-                    <p>서명은 출석 및 교육 이수 증빙으로 저장됩니다.</p>
+                    <p>전자서명 기록은 출석 및 교육 이수 증빙으로 저장됩니다.</p>
                   </div>
                 </div>
 
@@ -488,7 +488,7 @@ export default function AttendancePage() {
                     다시쓰기
                   </button>
                   <button className="primary-action" disabled={!canSaveSignature} onClick={handleSaveSignature} type="button">
-                    {step === "saving-signature" ? "저장 중" : "전자서명 제출"}
+                    {step === "saving-signature" ? "저장 중" : "서명하고 출석 완료"}
                   </button>
                 </div>
               </section>
